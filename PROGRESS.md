@@ -1,6 +1,77 @@
 # LIFEOS: progress log
 
-## Phase 1 · Architecture and data contracts (awaiting review)
+## Phase 2 · Backend foundation (awaiting review)
+
+**Branch:** `phase-2-backend`. Phases 0–1 are on `main` in `github.com/Simhhaaa/lifeOS`.
+
+### Done
+- **Repository:**
+  - Git initialised in the LifeOs folder, root `.gitignore` (secrets and build output excluded);
+  - Phases 0–1 committed and pushed to `main`.
+- **Local stack:** `docker-compose.yml` runs Postgres 16 on `127.0.0.1:54329`, with a `lifeos_test` database for pytest.
+- **Backend** (`backend/`, Python 3.13, FastAPI, SQLAlchemy 2 async, Alembic, Pydantic v2):
+  - **Configuration:** environment variables only; `.env` is git-ignored and `.env.example` is committed.
+  - **Errors:** problem+json with stable codes.
+  - **Passwords:** Argon2id, with equal-time handling for unknown users.
+  - **Tokens:** Ed25519 JWT access tokens (15 min) and opaque rotating refresh tokens. Only their hashes are stored, and reusing an old one revokes the whole session family.
+  - **Web sessions:** httpOnly cookies with CSRF double-submit. Mobile uses bearer tokens.
+  - **Login rate limit:** 5 attempts per 15 min per IP and username.
+  - **Idempotency:** stored in the same transaction as the write. Replays return the stored response; the same key with a different body gets 422; concurrent duplicates write once.
+  - **Ownership:** foreign or missing records return 404. `If-Match` versions return 409 with the server copy; deleted records return 410.
+  - **Reference endpoints:** auth (login, refresh, logout, `/me`), tasks CRUD, daily check-in (with the offline merge policy and readiness), and `/sync/changes` delta pull with tombstones.
+  - **Owner CLI:** `gen-key` and `create-owner`. There is no signup endpoint.
+- **Database:**
+  - first Alembic migration with all **41 tables** from `docs/database.md`;
+  - `change_seq` sequence plus triggers on 27 synced tables;
+  - an **append-only XP ledger**: a trigger blocks UPDATE and DELETE.
+  - Upgrade, downgrade and upgrade all verified.
+- **Tests:** 34 pytest tests against real Postgres:
+  - auth;
+  - idempotency, including concurrency;
+  - validation, including rejecting any XP field;
+  - conflicts and tombstones;
+  - ownership isolation with a second, test-only user;
+  - the daily-log merge policy;
+  - sync paging;
+  - ledger immutability;
+  - the **OpenAPI contract test** (implemented operations and required headers match `docs/api/openapi.yaml`);
+  - `alembic check` (models equal migrations).
+
+### Verification
+- `pytest`: **34 passed**. `ruff check` and `ruff format`: clean.
+- **Mutation check:**
+  - turning idempotency off makes 3 tests fail;
+  - turning the version check off makes 2 tests fail.
+  - Both restored afterwards.
+- **Real server boot:** `uvicorn` with `.env` gives `/healthz` 200, `/docs` 200, and unauthenticated `/api/v1/me` returns 401 problem+json.
+- **Contract coverage:** 11 of 59 operations are implemented. The rest land with their screens in Phases 3–6.
+- **Not yet done:**
+  - CI (GitHub Actions) isn't set up;
+  - the Redocly OpenAPI lint is still pending, because the package download was blocked by this session's permissions.
+
+### Known limitations (tracked)
+- **Sync cursor:** two transactions committing out of order can, in theory, make a pull skip a row (a lower `change_seq` committed after a reader passed it). It's harmless for one owner with low concurrency. Fix before Phase 4 mobile sync: a transaction-id watermark, or an overlap window.
+- **Rate limiter:** in-process, fine for one API instance. It moves to Postgres or Redis if the API is scaled out.
+
+### Owner decisions still open (from Phase 1; not needed for Phase 2)
+- XP values and caps.
+- Minimum sets and planned items.
+- XP reversal on delete.
+- Form metrics for Discipline, Consistency and Recovery.
+- Attribute targets.
+- Import source.
+- Hosting.
+
+### Next (only after approval)
+- CI on GitHub Actions: lint, tests with a Postgres service, contract test.
+- Phase 3, desktop web:
+  - real login screen;
+  - replace the sample data with API calls screen by screen;
+  - implement each screen's endpoints in the same pattern.
+
+---
+
+## Phase 1 · Architecture and data contracts (approved)
 
 **Phase 0 is complete and approved:** desktop Overview v2, seven module screens, mobile frames.
 

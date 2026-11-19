@@ -1,0 +1,21 @@
+# Local development only. Credentials here are throwaway local values, not secrets.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: lifeos
+      POSTGRES_PASSWORD: lifeos-local-only
+      POSTGRES_DB: lifeos
+    ports:
+      - "127.0.0.1:54329:5432"
+    volumes:
+      - lifeos-pg:/var/lib/postgresql/data
+      - ./backend/scripts/init-test-db.sql:/docker-entrypoint-initdb.d/10-test-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lifeos -d lifeos"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  lifeos-pg:

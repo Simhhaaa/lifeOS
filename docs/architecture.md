@@ -8,7 +8,7 @@
 |---|---|---|
 | `apps/web` | Next.js 16, React 19, TypeScript, Tailwind 4, Radix, Recharts | Desktop UI. It renders server data and holds no business rules beyond formatting and previews. |
 | `apps/mobile` | Expo + React Native + Expo Router | Fast logging and checking progress. Owns the offline pending-action queue. |
-| `backend` | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2 (async), Alembic | API, validation, authorization, progression engine, analytics. |
+| `backend` | Python 3.13, FastAPI, Pydantic v2, SQLAlchemy 2 (async), Alembic | API, validation, authorization, progression engine, analytics. |
 | Database | Managed PostgreSQL 16 | System of record. |
 | Object storage | S3-compatible, private bucket | Progress photos only, accessed through short-lived signed URLs. |
 | `packages/api-types` | `openapi-typescript` | TypeScript types generated from `docs/api/openapi.yaml`, shared by web and mobile. |
@@ -65,8 +65,8 @@ Providers stay replaceable (spec §5.2): configuration only comes from environme
 | D12 | **Design-first OpenAPI** (`docs/api/openapi.yaml`); a contract test compares it with FastAPI's generated schema | Web and mobile can build against the contract in parallel | Proposed |
 | D13 | **Units:** kg, km, minutes, hours as decimals; no unit conversion in v1 | Owner-approved kg; one user | Approved (Phase 0) |
 | D14 | **Week starts Monday**; quests reset Monday 00:00 local | Owner-approved | Approved (Phase 0) |
-| D15 | **Python 3.12, FastAPI, SQLAlchemy 2 async with asyncpg, Pydantic v2, Alembic, pytest, ruff** | Spec stack; current stable versions at Phase 2 start get pinned in `pyproject.toml` | Proposed |
-| D16 | **Monorepo with its own Git repository** at the LifeOs folder | The current Git root is the owner's home folder, so nothing can be committed safely | **Owner decision** |
+| D15 | **Python 3.13, FastAPI, SQLAlchemy 2 async with asyncpg, Pydantic v2, Alembic, pytest, ruff** | Spec stack. 3.13 is the newest Python with full wheel support on this machine; minimum versions are in `backend/pyproject.toml` | Adopted (Phase 2) |
+| D16 | **Monorepo with its own Git repository** at the LifeOs folder, remote `github.com/Simhhaaa/lifeOS` | Owner provided the repository | Adopted |
 
 ## 4. Non-goals for v1
 - Multiple users, organizations, sharing or public profiles.
