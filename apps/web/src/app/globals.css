@@ -1,0 +1,168 @@
+@import "tailwindcss";
+
+/*
+ * LIFEOS design tokens — "Petrol & Saffron".
+ * Components use SEMANTIC tokens only (base, slab, well, ink, saffron…), never raw hex.
+ * Phase 0 ships dark only; a light theme later is one `[data-theme="light"]` block
+ * that redefines these variables. Full documentation: /docs/ui-design-system.md
+ *
+ * Colour roles (each hue has one job):
+ *   saffron  lifetime progression: XP, levels, primary action, active navigation
+ *   sky      current capability: attributes, chart series 1
+ *   lilac    chart series 2
+ *   mint     improving / done / on plan
+ *   coral    declining / missed / attention (never used for "failure")
+ *   error    system errors only
+ */
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Surfaces: deep petrol */
+  --base: #081315;
+  --base-glow: #0f2a2c;
+  --slab: #0c1c1f;
+  --well: #122a2d;
+  --well-strong: #1a363a;
+
+  /* Edges */
+  --edge: #183034;
+  --edge-strong: #244449;
+
+  /* Ink: cool off-white */
+  --ink: #e8f0ec;
+  --ink-2: #9bb2ad;
+  --ink-3: #688580;
+
+  /* Hues */
+  --saffron: #f4b740;
+  --saffron-ink: #1d1404;
+  --saffron-soft: rgb(244 183 64 / 0.13);
+  --saffron-line: rgb(244 183 64 / 0.42);
+  --sky: #7fb2ff;
+  --sky-soft: rgb(127 178 255 / 0.14);
+  --lilac: #b39dff;
+  --mint: #5fd4ae;
+  --mint-soft: rgb(95 212 174 / 0.13);
+  --coral: #f27b62;
+  --coral-soft: rgb(242 123 98 / 0.13);
+  --error: #ff6464;
+  --error-soft: rgb(255 100 100 / 0.12);
+
+  /* Charts */
+  --ref: #5f7c77;
+  --grid: #16302f;
+}
+
+@theme inline {
+  --color-base: var(--base);
+  --color-slab: var(--slab);
+  --color-well: var(--well);
+  --color-well-strong: var(--well-strong);
+  --color-edge: var(--edge);
+  --color-edge-strong: var(--edge-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-saffron: var(--saffron);
+  --color-saffron-ink: var(--saffron-ink);
+  --color-saffron-soft: var(--saffron-soft);
+  --color-saffron-line: var(--saffron-line);
+  --color-sky: var(--sky);
+  --color-sky-soft: var(--sky-soft);
+  --color-lilac: var(--lilac);
+  --color-mint: var(--mint);
+  --color-mint-soft: var(--mint-soft);
+  --color-coral: var(--coral);
+  --color-coral-soft: var(--coral-soft);
+  --color-error: var(--error);
+  --color-error-soft: var(--error-soft);
+  --color-ref: var(--ref);
+
+  --font-sans: var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-dm-mono), ui-monospace, monospace;
+
+  --radius-ctl: 10px;
+  --radius-box: 14px;
+  --radius-slab: 22px;
+
+  --text-2xs: 11px;
+  --text-2xs--line-height: 15px;
+  --text-xs: 12px;
+  --text-xs--line-height: 16px;
+  --text-sm: 13px;
+  --text-sm--line-height: 19px;
+  --text-base: 14px;
+  --text-base--line-height: 21px;
+
+  --animate-fade-in: fade-in 180ms ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+html {
+  background: var(--base);
+}
+
+body {
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 21px;
+  /* one quiet light source, top right */
+  background:
+    radial-gradient(1100px 520px at 78% -12%, var(--base-glow), transparent 70%),
+    var(--base);
+  background-attachment: fixed;
+}
+
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--saffron);
+    outline-offset: 2px;
+  }
+}
+
+::selection {
+  background: var(--saffron-soft);
+}
+
+@utility num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Diagonal hatching for "no data". Uses currentColor. */
+@utility hatch {
+  background-image: repeating-linear-gradient(135deg, currentColor 0 1px, transparent 1px 5px);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--edge-strong) transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.recharts-wrapper svg:focus,
+.recharts-surface:focus {
+  outline: none;
+}

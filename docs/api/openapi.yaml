@@ -1,0 +1,1762 @@
+openapi: 3.1.0
+info:
+  title: LIFEOS API
+  version: 1.0.0-draft
+  summary: Private personal API for web and mobile.
+  description: |
+    Design-first contract (Phase 1, proposed). FastAPI's generated schema must match this file.
+
+    - All paths are under `/api/v1`.
+    - **Mutations** require an `Idempotency-Key` header. Updates to versioned resources require `If-Match: <version>`.
+    - **Errors** use RFC 9457 `application/problem+json`.
+    - **Times** are UTC (`date-time`). Day fields use the owner's local date (`YYYY-MM-DD`).
+    - **No XP in requests.** Clients never send XP, levels or scores; the server derives them.
+  license:
+    name: Private
+    identifier: LicenseRef-Private
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local
+security:
+  - cookieAuth: []
+  - bearerAuth: []
+tags:
+  - name: auth
+  - name: dashboard
+  - name: academics
+  - name: fitness
+  - name: health
+  - name: productivity
+  - name: progression
+  - name: goals
+  - name: analytics
+  - name: sync
+  - name: settings
+
+paths:
+  # ───────────────────────── auth ─────────────────────────
+  /auth/login:
+    post:
+      tags: [auth]
+      operationId: login
+      summary: Log in (rate limited). Web gets httpOnly cookies, mobile gets tokens in the body.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200":
+          description: Logged in
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenPair" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /auth/refresh:
+    post:
+      tags: [auth]
+      operationId: refresh
+      summary: Rotate the refresh token. Reusing an old token revokes the whole session family.
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token: { type: string, description: Mobile only; web sends the cookie }
+      responses:
+        "200":
+          description: New tokens
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenPair" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /auth/logout:
+    post:
+      tags: [auth]
+      operationId: logout
+      summary: Revoke the current session family.
+      responses:
+        "204": { description: Logged out }
+  /me:
+    get:
+      tags: [auth]
+      operationId: getMe
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  # ───────────────────────── dashboard ─────────────────────────
+  /dashboard/overview:
+    get:
+      tags: [dashboard]
+      operationId: getOverview
+      summary: Everything the Overview screen needs in one call.
+      responses:
+        "200":
+          description: Overview
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Overview" }
+
+  # ───────────────────────── academics ─────────────────────────
+  /subjects:
+    get:
+      tags: [academics]
+      operationId: listSubjects
+      responses:
+        "200":
+          description: Subjects
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Subject" } }
+    post:
+      tags: [academics]
+      operationId: createSubject
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SubjectInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Subject" }
+        "422": { $ref: "#/components/responses/Invalid" }
+  /subjects/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    patch:
+      tags: [academics]
+      operationId: updateSubject
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }, { $ref: "#/components/parameters/IfMatch" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SubjectInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Subject" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [academics]
+      operationId: deleteSubject
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }, { $ref: "#/components/parameters/IfMatch" }]
+      responses:
+        "204": { description: Deleted (tombstoned) }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /study/sessions:
+    get:
+      tags: [academics]
+      operationId: listStudySessions
+      parameters: [{ $ref: "#/components/parameters/From" }, { $ref: "#/components/parameters/To" }, { $ref: "#/components/parameters/Cursor" }, { $ref: "#/components/parameters/Limit" }]
+      responses:
+        "200":
+          description: Page of study sessions
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/Page" }
+                  - type: object
+                    properties:
+                      items: { type: array, items: { $ref: "#/components/schemas/StudySession" } }
+    post:
+      tags: [academics]
+      operationId: createStudySession
+      summary: Log a focused study session. The client may supply `id` (offline create).
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StudySessionInput" }
+      responses:
+        "201":
+          description: Created; XP is processed server-side in the same transaction
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StudySession" }
+        "422": { $ref: "#/components/responses/Invalid" }
+  /study/analytics:
+    get:
+      tags: [academics]
+      operationId: getAcademicsSummary
+      summary: Data for the Academics screen (stat strip, subjects, DSA, sessions timeline).
+      responses:
+        "200":
+          description: Academics summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AcademicsSummary" }
+  /coding/sessions:
+    post:
+      tags: [academics]
+      operationId: createCodingSession
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CodingSessionInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CodingSession" }
+        "422": { $ref: "#/components/responses/Invalid" }
+  /dsa/problems:
+    post:
+      tags: [academics]
+      operationId: logDsaProblem
+      summary: Record a solved problem (outcome evidence). A duplicate URL returns 409.
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DsaProblemInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DsaProblem" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /assignments:
+    get:
+      tags: [academics]
+      operationId: listAssignments
+      responses:
+        "200":
+          description: Assignments, sorted by due date
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Assignment" } }
+    post:
+      tags: [academics]
+      operationId: createAssignment
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssignmentInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Assignment" }
+  /assignments/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    patch:
+      tags: [academics]
+      operationId: updateAssignment
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }, { $ref: "#/components/parameters/IfMatch" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssignmentInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Assignment" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /milestones:
+    post:
+      tags: [academics]
+      operationId: createMilestone
+      summary: A learning or assessment milestone (Learning outcome evidence) or a coding/project milestone.
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MilestoneInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Milestone" }
+  /semesters:
+    get:
+      tags: [academics]
+      operationId: listSemesters
+      responses:
+        "200":
+          description: Semesters with computed CGPA
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [semesters, cgpa]
+                properties:
+                  semesters: { type: array, items: { $ref: "#/components/schemas/Semester" } }
+                  cgpa: { type: [number, "null"] }
+
+  # ───────────────────────── fitness ─────────────────────────
+  /exercises:
+    get:
+      tags: [fitness]
+      operationId: listExercises
+      responses:
+        "200":
+          description: Exercise library with best est. 1RM
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Exercise" } }
+  /workouts:
+    get:
+      tags: [fitness]
+      operationId: listWorkouts
+      parameters: [{ $ref: "#/components/parameters/Cursor" }, { $ref: "#/components/parameters/Limit" }]
+      responses:
+        "200":
+          description: Page of workouts with sets
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/Page" }
+                  - type: object
+                    properties:
+                      items: { type: array, items: { $ref: "#/components/schemas/Workout" } }
+    post:
+      tags: [fitness]
+      operationId: startWorkout
+      summary: Start or log a workout. Sets may be included or added later. The client may supply `id`.
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WorkoutInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Workout" }
+  /workouts/{id}/sets:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [fitness]
+      operationId: addSet
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExerciseSetInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExerciseSet" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /workouts/{id}/finish:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [fitness]
+      operationId: finishWorkout
+      summary: Mark finished. Emits `workout.completed` and any `lift.e1rm_pr` events.
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }, { $ref: "#/components/parameters/IfMatch" }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ended_at: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Finished
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Workout" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /fitness/progression:
+    get:
+      tags: [fitness]
+      operationId: getFitnessProgression
+      parameters:
+        - { name: weeks, in: query, schema: { type: integer, minimum: 1, maximum: 52, default: 8 } }
+      responses:
+        "200":
+          description: Lift history, PRs, weekly volume by muscle group, this week's plan
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FitnessProgression" }
+  /body-measurements:
+    post:
+      tags: [fitness]
+      operationId: logBodyMeasurement
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BodyMeasurementInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BodyMeasurement" }
+  /progress-photos/upload-url:
+    post:
+      tags: [fitness]
+      operationId: createPhotoUpload
+      summary: Get a short-lived signed PUT URL for a private photo upload.
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [taken_on, content_type, bytes]
+              properties:
+                taken_on: { type: string, format: date }
+                content_type: { type: string, enum: [image/jpeg, image/png, image/heic] }
+                bytes: { type: integer, minimum: 1, maximum: 15728640 }
+      responses:
+        "201":
+          description: Upload slot
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [photo_id, upload_url, expires_at]
+                properties:
+                  photo_id: { type: string, format: uuid }
+                  upload_url: { type: string, format: uri }
+                  expires_at: { type: string, format: date-time }
+
+  # ───────────────────────── health ─────────────────────────
+  /daily-logs/{date}:
+    parameters: [{ $ref: "#/components/parameters/LocalDatePath" }]
+    get:
+      tags: [health]
+      operationId: getDailyLog
+      responses:
+        "200":
+          description: Check-in with computed readiness
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DailyLog" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [health]
+      operationId: upsertDailyLog
+      summary: Create or update the check-in for a local date. Updates require `If-Match`.
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }, { $ref: "#/components/parameters/IfMatchOptional" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DailyLogInput" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DailyLog" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /health/records:
+    post:
+      tags: [health]
+      operationId: logHealthRecord
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HealthRecordInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthRecord" }
+  /cardio/sessions:
+    post:
+      tags: [health]
+      operationId: logCardio
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CardioInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Cardio" }
+  /health/summary:
+    get:
+      tags: [health]
+      operationId: getHealthSummary
+      parameters:
+        - { name: days, in: query, schema: { type: integer, minimum: 7, maximum: 90, default: 28 } }
+      responses:
+        "200":
+          description: Sleep, steps, ratings, readiness history, runs, input sources
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthSummary" }
+
+  # ───────────────────────── productivity ─────────────────────────
+  /tasks:
+    get:
+      tags: [productivity]
+      operationId: listTasks
+      parameters: [{ $ref: "#/components/parameters/From" }, { $ref: "#/components/parameters/To" }]
+      responses:
+        "200":
+          description: Tasks planned in the range
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Task" } }
+    post:
+      tags: [productivity]
+      operationId: createTask
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TaskInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Task" }
+  /tasks/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    patch:
+      tags: [productivity]
+      operationId: updateTask
+      summary: Edit or complete (`completed_at`).
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }, { $ref: "#/components/parameters/IfMatch" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TaskPatch" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Task" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "410": { $ref: "#/components/responses/Gone" }
+    delete:
+      tags: [productivity]
+      operationId: deleteTask
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }, { $ref: "#/components/parameters/IfMatch" }]
+      responses:
+        "204": { description: Deleted (tombstoned) }
+  /habits:
+    get:
+      tags: [productivity]
+      operationId: listHabits
+      parameters:
+        - { name: days, in: query, schema: { type: integer, minimum: 7, maximum: 90, default: 28 } }
+      responses:
+        "200":
+          description: Habits with recent logs, streak and rate
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Habit" } }
+  /habits/{id}/logs/{date}:
+    parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/LocalDatePath" }]
+    put:
+      tags: [productivity]
+      operationId: setHabitLog
+      summary: Mark a habit done or not done for a day. Naturally idempotent.
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [done]
+              properties:
+                done: { type: boolean }
+      responses:
+        "200": { description: Saved }
+  /screen-time/{date}:
+    parameters: [{ $ref: "#/components/parameters/LocalDatePath" }]
+    put:
+      tags: [productivity]
+      operationId: setScreenTime
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [minutes]
+              properties:
+                minutes: { type: integer, minimum: 0, maximum: 1440 }
+      responses:
+        "200": { description: Saved }
+  /productivity/summary:
+    get:
+      tags: [productivity]
+      operationId: getProductivitySummary
+      responses:
+        "200":
+          description: Week agenda, completion, focus sessions, screen vs focus
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductivitySummary" }
+
+  # ───────────────────────── progression ─────────────────────────
+  /skills:
+    get:
+      tags: [progression]
+      operationId: listSkills
+      responses:
+        "200":
+          description: All skills with level, XP, form and evidence rules
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Skill" } }
+  /skills/{key}:
+    parameters:
+      - { name: key, in: path, required: true, schema: { type: string, pattern: "^[a-z_]+$" } }
+    get:
+      tags: [progression]
+      operationId: getSkill
+      responses:
+        "200":
+          description: Skill detail with weekly XP and sources
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SkillDetail" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /attributes:
+    get:
+      tags: [progression]
+      operationId: listAttributes
+      responses:
+        "200":
+          description: Current attributes with signals and coverage
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Attribute" } }
+  /progression/history:
+    get:
+      tags: [progression]
+      operationId: getXpHistory
+      parameters:
+        - { name: skill, in: query, schema: { type: string } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200":
+          description: XP ledger, newest first (paged by whole days)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/Page" }
+                  - type: object
+                    properties:
+                      items: { type: array, items: { $ref: "#/components/schemas/XpTransaction" } }
+  /xp-rules:
+    get:
+      tags: [progression]
+      operationId: listXpRules
+      summary: Current XP rules, for method popovers.
+      responses:
+        "200":
+          description: Rules
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/XpRule" } }
+
+  # ───────────────────────── goals ─────────────────────────
+  /goals:
+    get:
+      tags: [goals]
+      operationId: listGoals
+      responses:
+        "200":
+          description: Goals with milestones and projection
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Goal" } }
+    post:
+      tags: [goals]
+      operationId: createGoal
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GoalInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Goal" }
+  /quests:
+    get:
+      tags: [goals]
+      operationId: listQuests
+      parameters:
+        - { name: period, in: query, schema: { type: string, enum: [day, week], default: week } }
+      responses:
+        "200":
+          description: Current quests with progress
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Quest" } }
+  /challenges:
+    get:
+      tags: [goals]
+      operationId: listChallenges
+      responses:
+        "200":
+          description: Suggested challenges with basis and rule
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Challenge" } }
+  /challenges/{key}/accept:
+    parameters:
+      - { name: key, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [goals]
+      operationId: acceptChallenge
+      summary: Turn a suggested challenge into this week's quest.
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      responses:
+        "201":
+          description: Quest created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Quest" }
+  /achievements:
+    get:
+      tags: [goals]
+      operationId: listAchievements
+      responses:
+        "200":
+          description: Definitions with unlock state and progress
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Achievement" } }
+
+  # ───────────────────────── analytics ─────────────────────────
+  /analytics/weekly:
+    get:
+      tags: [analytics]
+      operationId: getWeeklySummary
+      parameters:
+        - { name: period, in: query, schema: { type: string, enum: [week, month], default: week } }
+      responses:
+        "200":
+          description: Summary rows (current vs previous)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PeriodSummary" }
+  /analytics/patterns:
+    get:
+      tags: [analytics]
+      operationId: getPatterns
+      responses:
+        "200":
+          description: Trends, plateaus, time-of-day heatmap, correlations
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Patterns" }
+  /insights:
+    get:
+      tags: [analytics]
+      operationId: listInsights
+      responses:
+        "200":
+          description: At most three explainable insights, minus dismissed ones
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Insight" } }
+  /insights/{key}/dismiss:
+    parameters:
+      - { name: key, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [analytics]
+      operationId: dismissInsight
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      responses:
+        "204": { description: Dismissed }
+
+  # ───────────────────────── sync ─────────────────────────
+  /sync/changes:
+    get:
+      tags: [sync]
+      operationId: pullChanges
+      summary: Pull everything changed after a cursor, including tombstones.
+      parameters:
+        - { name: since, in: query, required: true, schema: { type: string, description: "Opaque cursor; '0' for a full pull" } }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200":
+          description: Changes
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChangeSet" }
+
+  # ───────────────────────── settings ─────────────────────────
+  /settings:
+    get:
+      tags: [settings]
+      operationId: getSettings
+      responses:
+        "200":
+          description: Settings and personal targets
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Settings" }
+    patch:
+      tags: [settings]
+      operationId: updateSettings
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }, { $ref: "#/components/parameters/IfMatch" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SettingsPatch" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Settings" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /export:
+    post:
+      tags: [settings]
+      operationId: requestExport
+      summary: Build a ZIP export (JSON per table; photos optional). Returns a short-lived download URL.
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                include_photos: { type: boolean, default: false }
+      responses:
+        "202":
+          description: Export started
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [export_id, status]
+                properties:
+                  export_id: { type: string, format: uuid }
+                  status: { type: string, enum: [pending, ready, failed] }
+                  download_url: { type: [string, "null"], format: uri }
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: lifeos_access
+      description: Web. httpOnly, Secure, SameSite=Lax, plus the `X-CSRF-Token` header on mutations.
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Mobile. Access token about 15 min; refresh tokens rotate.
+
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    LocalDatePath:
+      name: date
+      in: path
+      required: true
+      description: Owner-local date
+      schema: { type: string, format: date }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Client-generated, unique per logical action (UUID recommended). Replays return the stored response.
+      schema: { type: string, minLength: 16, maxLength: 128 }
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: The record's current `version`.
+      schema: { type: string, pattern: "^[0-9]+$" }
+    IfMatchOptional:
+      name: If-Match
+      in: header
+      required: false
+      description: Required when updating an existing record.
+      schema: { type: string, pattern: "^[0-9]+$" }
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+    From:
+      name: from
+      in: query
+      schema: { type: string, format: date }
+    To:
+      name: to
+      in: query
+      schema: { type: string, format: date }
+
+  responses:
+    Unauthorized:
+      description: Not authenticated
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    NotFound:
+      description: Not found (or not owned; never revealed)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Conflict:
+      description: Version mismatch, duplicate, or Idempotency-Key reused with a different body. Includes the current server copy.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/ConflictProblem" }
+    Gone:
+      description: The record was deleted on another device
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Invalid:
+      description: Validation failed
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    TooManyRequests:
+      description: Rate limited
+      headers:
+        Retry-After: { schema: { type: integer } }
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+
+  schemas:
+    # ── common ──
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        code: { type: string, description: "Stable machine code, e.g. version_conflict, idempotency_mismatch, validation_error" }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              message: { type: string }
+    ConflictProblem:
+      allOf:
+        - { $ref: "#/components/schemas/Problem" }
+        - type: object
+          properties:
+            current: { type: object, description: The server's current copy of the record }
+    Page:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: {} }
+        next_cursor: { type: [string, "null"] }
+    Meta:
+      type: object
+      required: [id, version, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        version: { type: integer, minimum: 1 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Rating:
+      type: integer
+      minimum: 1
+      maximum: 5
+    FormResult:
+      type: object
+      required: [status, recent_n, baseline_n]
+      properties:
+        status: { type: string, enum: [ok, insufficient, no_metric] }
+        value: { type: [number, "null"], description: "(recent − baseline) / baseline" }
+        direction: { type: [string, "null"], enum: [up, down, flat, null] }
+        recent_n: { type: integer }
+        baseline_n: { type: integer }
+        metric: { type: [string, "null"] }
+    LevelProgress:
+      type: object
+      required: [level, xp, current_level_xp, next_level_xp]
+      properties:
+        level: { type: integer, minimum: 1 }
+        xp: { type: integer, minimum: 0 }
+        current_level_xp: { type: integer }
+        next_level_xp: { type: integer }
+
+    # ── auth ──
+    LoginRequest:
+      type: object
+      required: [username, password, client]
+      properties:
+        username: { type: string, maxLength: 64 }
+        password: { type: string, minLength: 12, maxLength: 256, writeOnly: true }
+        client: { type: string, enum: [web, mobile] }
+    TokenPair:
+      type: object
+      properties:
+        access_token: { type: string, description: Mobile only }
+        refresh_token: { type: string, description: Mobile only }
+        expires_in: { type: integer }
+    User:
+      type: object
+      required: [id, username, timezone]
+      properties:
+        id: { type: string, format: uuid }
+        username: { type: string }
+        display_name: { type: [string, "null"] }
+        timezone: { type: string, examples: [Asia/Kolkata] }
+
+    # ── dashboard ──
+    Overview:
+      type: object
+      description: Mirrors the Overview screen. Each block is null when there is not enough data, so the UI shows its empty state.
+      required: [now, profile, attributes, tasks, readiness, consistency, activity, skills, strength, quests, goals, xp_events, insights]
+      properties:
+        now: { type: string, format: date-time }
+        profile:
+          type: object
+          properties:
+            lifetime_xp: { type: integer }
+            progress: { $ref: "#/components/schemas/LevelProgress" }
+            week_xp: { type: integer }
+            prev_week_xp_same_days: { type: integer }
+        attributes: { type: array, items: { $ref: "#/components/schemas/Attribute" } }
+        tasks: { type: array, items: { $ref: "#/components/schemas/Task" } }
+        readiness: { $ref: "#/components/schemas/Readiness" }
+        consistency:
+          type: object
+          properties:
+            weeks:
+              type: array
+              items:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    date: { type: string, format: date }
+                    status: { type: string, enum: [on_plan, partial, missed, rest, today, future] }
+                    planned: { type: integer }
+                    completed: { type: integer }
+            this_week_on_plan: { type: integer }
+            this_week_planned_days: { type: integer }
+            prev_weeks_avg_on_plan: { type: number }
+        activity:
+          type: object
+          properties:
+            days:
+              type: array
+              items:
+                type: object
+                properties:
+                  date: { type: string, format: date }
+                  study_h: { type: number }
+                  coding_h: { type: number }
+                  avg7_h: { type: number }
+            study_total_h: { type: number }
+            coding_total_h: { type: number }
+            prev_study_total_h: { type: number }
+            prev_coding_total_h: { type: number }
+        skills: { type: array, items: { $ref: "#/components/schemas/Skill" } }
+        strength:
+          type: object
+          properties:
+            weeks:
+              type: array
+              items:
+                type: object
+                properties:
+                  week_start: { type: string, format: date }
+                  e1rm: { type: object, additionalProperties: { type: [number, "null"] } }
+            latest_pr: { oneOf: [{ $ref: "#/components/schemas/PersonalRecord" }, { type: "null" }] }
+        quests: { type: array, items: { $ref: "#/components/schemas/Quest" } }
+        goals: { type: array, items: { $ref: "#/components/schemas/Goal" } }
+        xp_events: { type: array, items: { $ref: "#/components/schemas/XpTransaction" } }
+        insights: { type: array, items: { $ref: "#/components/schemas/Insight" } }
+    Readiness:
+      type: object
+      properties:
+        local_date: { type: string, format: date }
+        sleep_last_night_h: { type: [number, "null"] }
+        sleep_avg7_h: { type: [number, "null"] }
+        energy: { oneOf: [{ $ref: "#/components/schemas/Rating" }, { type: "null" }] }
+        recovery: { oneOf: [{ $ref: "#/components/schemas/Rating" }, { type: "null" }] }
+        result:
+          oneOf:
+            - type: "null"
+            - type: object
+              properties:
+                level: { type: string, enum: [High, Moderate, Low] }
+                points: { type: integer, minimum: 0, maximum: 6 }
+
+    # ── academics ──
+    SubjectInput:
+      type: object
+      required: [name, short_name]
+      properties:
+        name: { type: string, maxLength: 120 }
+        short_name: { type: string, maxLength: 12 }
+        credits: { type: integer, minimum: 0, maximum: 30 }
+        units_total: { type: integer, minimum: 0, maximum: 100 }
+        units_done: { type: integer, minimum: 0, maximum: 100 }
+        semester_id: { type: [string, "null"], format: uuid }
+    Subject:
+      allOf:
+        - { $ref: "#/components/schemas/Meta" }
+        - { $ref: "#/components/schemas/SubjectInput" }
+        - type: object
+          properties:
+            hours_28d: { type: number, readOnly: true }
+            sessions_28d: { type: integer, readOnly: true }
+            last_studied_at: { type: [string, "null"], format: date-time, readOnly: true }
+    StudySessionInput:
+      type: object
+      required: [started_at, minutes]
+      properties:
+        id: { type: string, format: uuid, description: Optional client-generated id }
+        subject_id: { type: [string, "null"], format: uuid }
+        started_at: { type: string, format: date-time }
+        minutes: { type: integer, minimum: 1, maximum: 600 }
+        planned_minutes: { type: [integer, "null"], minimum: 1, maximum: 600 }
+        focus_rating: { oneOf: [{ $ref: "#/components/schemas/Rating" }, { type: "null" }] }
+        note: { type: [string, "null"], maxLength: 2000 }
+    StudySession:
+      allOf:
+        - { $ref: "#/components/schemas/Meta" }
+        - { $ref: "#/components/schemas/StudySessionInput" }
+        - type: object
+          properties:
+            local_date: { type: string, format: date, readOnly: true }
+    CodingSessionInput:
+      type: object
+      required: [started_at, minutes, area]
+      properties:
+        id: { type: string, format: uuid }
+        area: { type: string, enum: [dsa, project, course, other] }
+        started_at: { type: string, format: date-time }
+        minutes: { type: integer, minimum: 1, maximum: 600 }
+        planned_minutes: { type: [integer, "null"], minimum: 1, maximum: 600 }
+        focus_rating: { oneOf: [{ $ref: "#/components/schemas/Rating" }, { type: "null" }] }
+        problems:
+          type: array
+          maxItems: 20
+          items: { $ref: "#/components/schemas/DsaProblemInput" }
+    CodingSession:
+      allOf:
+        - { $ref: "#/components/schemas/Meta" }
+        - { $ref: "#/components/schemas/CodingSessionInput" }
+    DsaProblemInput:
+      type: object
+      required: [difficulty, topic, solved_at]
+      properties:
+        id: { type: string, format: uuid }
+        coding_session_id: { type: [string, "null"], format: uuid }
+        difficulty: { type: string, enum: [easy, medium, hard] }
+        topic: { type: string, maxLength: 60 }
+        title: { type: [string, "null"], maxLength: 200 }
+        url: { type: [string, "null"], format: uri }
+        solved_at: { type: string, format: date-time }
+    DsaProblem:
+      allOf:
+        - { $ref: "#/components/schemas/Meta" }
+        - { $ref: "#/components/schemas/DsaProblemInput" }
+    AssignmentInput:
+      type: object
+      required: [subject_id, title, due_at, status]
+      properties:
+        subject_id: { type: string, format: uuid }
+        title: { type: string, maxLength: 200 }
+        due_at: { type: string, format: date-time }
+        status: { type: string, enum: [not_started, in_progress, submitted, graded] }
+        grade_score: { type: [number, "null"] }
+        grade_max: { type: [number, "null"] }
+    Assignment:
+      allOf:
+        - { $ref: "#/components/schemas/Meta" }
+        - { $ref: "#/components/schemas/AssignmentInput" }
+    MilestoneInput:
+      type: object
+      required: [kind, title]
+      properties:
+        kind: { type: string, enum: [learning, assessment, project] }
+        title: { type: string, maxLength: 200 }
+        subject_id: { type: [string, "null"], format: uuid }
+        project: { type: [string, "null"], maxLength: 120 }
+        planned_for: { type: [string, "null"], format: date }
+        completed_at: { type: [string, "null"], format: date-time }
+        score: { type: [number, "null"] }
+        max_score: { type: [number, "null"] }
+    Milestone:
+      allOf:
+        - { $ref: "#/components/schemas/Meta" }
+        - { $ref: "#/components/schemas/MilestoneInput" }
+    Semester:
+      type: object
+      required: [id, label, ordinal]
+      properties:
+        id: { type: string, format: uuid }
+        label: { type: string }
+        ordinal: { type: integer }
+        credits: { type: integer }
+        sgpa: { type: [number, "null"], minimum: 0, maximum: 10 }
+        is_current: { type: boolean }
+    AcademicsSummary:
+      type: object
+      properties:
+        study_hours_14d: { type: number }
+        prev_study_hours_14d: { type: number }
+        coding_hours_14d: { type: number }
+        prev_coding_hours_14d: { type: number }
+        subjects: { type: array, items: { $ref: "#/components/schemas/Subject" } }
+        sessions_7d: { type: array, items: { $ref: "#/components/schemas/FocusSession" } }
+        dsa:
+          type: object
+          properties:
+            lifetime: { type: integer }
+            window: { type: integer }
+            by_difficulty: { type: object, additionalProperties: { type: integer } }
+            by_topic: { type: array, items: { type: object, properties: { topic: { type: string }, solved: { type: integer } } } }
+            weekly: { type: array, items: { type: object, properties: { week_start: { type: string, format: date }, count: { type: integer } } } }
+        next_deadline: { oneOf: [{ $ref: "#/components/schemas/Assignment" }, { type: "null" }] }
+    FocusSession:
+      type: object
+      required: [id, kind, start, minutes, label]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [study, coding] }
+        start: { type: string, format: date-time }
+        minutes: { type: integer }
+        label: { type: string }
+
+    # ── fitness ──
+    Exercise:
+      type: object
+      required: [id, name, muscle_group]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        muscle_group: { type: string, enum: [chest, back, legs, shoulders, arms, core, full_body] }
+        equipment: { type: [string, "null"] }
+        tracked_lift: { type: [string, "null"], enum: [bench, squat, deadlift, ohp, null] }
+        sessions_8w: { type: integer, readOnly: true }
+        best_e1rm_kg: { type: [number, "null"], readOnly: true, description: "Epley on 1–10 rep sets; null otherwise" }
+        last_done: { type: [string, "null"], format: date, readOnly: true }
+    ExerciseSetInput:
+      type: object
+      required: [exercise_id, position, load_kg, reps]
+      properties:
+        id: { type: string, format: uuid }
+        exercise_id: { type: string, format: uuid }
+        position: { type: integer, minimum: 1, maximum: 200 }
+        load_kg: { type: number, minimum: 0, maximum: 600, multipleOf: 0.25 }
+        reps: { type: integer, minimum: 1, maximum: 100 }
+        rpe: { type: [number, "null"], minimum: 5, maximum: 10, multipleOf: 0.5 }
+        is_warmup: { type: boolean, default: false }
+        is_top_set: { type: boolean, default: false }
+    ExerciseSet:
+      allOf:
+        - { $ref: "#/components/schemas/Meta" }
+        - { $ref: "#/components/schemas/ExerciseSetInput" }
+        - type: object
+          properties:
+            e1rm_kg: { type: [number, "null"], readOnly: true }
+    WorkoutInput:
+      type: object
+      required: [started_at]
+      properties:
+        id: { type: string, format: uuid }
+        template_id: { type: [string, "null"], format: uuid }
+        started_at: { type: string, format: date-time }
+        ended_at: { type: [string, "null"], format: date-time }
+        note: { type: [string, "null"], maxLength: 2000 }
+        sets: { type: array, maxItems: 200, items: { $ref: "#/components/schemas/ExerciseSetInput" } }
+    Workout:
+      allOf:
+        - { $ref: "#/components/schemas/Meta" }
+        - type: object
+          properties:
+            template_id: { type: [string, "null"], format: uuid }
+            split: { type: [string, "null"] }
+            started_at: { type: string, format: date-time }
+            ended_at: { type: [string, "null"], format: date-time }
+            local_date: { type: string, format: date }
+            sets: { type: array, items: { $ref: "#/components/schemas/ExerciseSet" } }
+            volume_kg: { type: number, readOnly: true }
+            pr: { type: boolean, readOnly: true }
+    PersonalRecord:
+      type: object
+      properties:
+        exercise: { type: string }
+        e1rm_kg: { type: number }
+        load_kg: { type: number }
+        reps: { type: integer }
+        date: { type: string, format: date }
+    FitnessProgression:
+      type: object
+      properties:
+        this_week:
+          type: array
+          items:
+            type: object
+            properties:
+              date: { type: string, format: date }
+              planned: { type: boolean }
+              workout_id: { type: [string, "null"], format: uuid }
+        next_in_rotation: { type: [string, "null"], description: Template name }
+        lifts:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: object
+              properties:
+                date: { type: string, format: date }
+                e1rm_kg: { type: number }
+                load_kg: { type: number }
+                reps: { type: integer }
+                pr: { type: boolean }
+        records: { type: array, items: { $ref: "#/components/schemas/PersonalRecord" } }
+        weekly:
+          type: array
+          items:
+            type: object
+            properties:
+              week_start: { type: string, format: date }
+              sessions: { type: integer }
+              volume_kg: { type: number }
+              sets_by_muscle: { type: object, additionalProperties: { type: integer } }
+    BodyMeasurementInput:
+      type: object
+      required: [measured_on]
+      properties:
+        measured_on: { type: string, format: date }
+        weight_kg: { type: [number, "null"], minimum: 20, maximum: 400 }
+        waist_cm: { type: [number, "null"], minimum: 30, maximum: 250 }
+    BodyMeasurement:
+      allOf:
+        - { $ref: "#/components/schemas/Meta" }
+        - { $ref: "#/components/schemas/BodyMeasurementInput" }
+
+    # ── health ──
+    DailyLogInput:
+      type: object
+      properties:
+        sleep_hours: { type: [number, "null"], minimum: 0, maximum: 16, multipleOf: 0.25 }
+        sleep_quality: { oneOf: [{ $ref: "#/components/schemas/Rating" }, { type: "null" }] }
+        energy: { oneOf: [{ $ref: "#/components/schemas/Rating" }, { type: "null" }] }
+        recovery: { oneOf: [{ $ref: "#/components/schemas/Rating" }, { type: "null" }] }
+        mood: { oneOf: [{ $ref: "#/components/schemas/Rating" }, { type: "null" }] }
+    DailyLog:
+      allOf:
+        - { $ref: "#/components/schemas/Meta" }
+        - { $ref: "#/components/schemas/DailyLogInput" }
+        - type: object
+          properties:
+            local_date: { type: string, format: date }
+            readiness: { $ref: "#/components/schemas/Readiness" }
+    HealthRecordInput:
+      type: object
+      required: [metric, local_date, value]
+      properties:
+        metric: { type: string, enum: [steps, resting_hr, hydration_l] }
+        local_date: { type: string, format: date }
+        value: { type: number, minimum: 0, maximum: 100000 }
+        source: { type: string, enum: [manual, import], default: manual }
+    HealthRecord:
+      allOf:
+        - { $ref: "#/components/schemas/Meta" }
+        - { $ref: "#/components/schemas/HealthRecordInput" }
+    CardioInput:
+      type: object
+      required: [kind, started_at, distance_km, duration_s]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [run, walk, cycle, other] }
+        started_at: { type: string, format: date-time }
+        distance_km: { type: number, minimum: 0, maximum: 300 }
+        duration_s: { type: integer, minimum: 1, maximum: 86400 }
+    Cardio:
+      allOf:
+        - { $ref: "#/components/schemas/Meta" }
+        - { $ref: "#/components/schemas/CardioInput" }
+    HealthSummary:
+      type: object
+      properties:
+        days:
+          type: array
+          items:
+            type: object
+            properties:
+              date: { type: string, format: date }
+              sleep_hours: { type: [number, "null"] }
+              sleep_quality: { type: [integer, "null"] }
+              steps: { type: [integer, "null"] }
+              energy: { type: [integer, "null"] }
+              recovery: { type: [integer, "null"] }
+              mood: { type: [integer, "null"] }
+              readiness: { type: [string, "null"], enum: [High, Moderate, Low, null] }
+        sleep_avg_14d: { type: [number, "null"] }
+        steps_avg_14d: { type: [number, "null"] }
+        runs: { type: array, items: { $ref: "#/components/schemas/Cardio" } }
+        inputs:
+          type: array
+          items:
+            type: object
+            properties:
+              key: { type: string }
+              source: { type: string }
+              last_logged: { type: [string, "null"], format: date }
+
+    # ── productivity ──
+    TaskInput:
+      type: object
+      required: [title]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        notes: { type: [string, "null"], maxLength: 2000 }
+        module: { type: [string, "null"], enum: [academics, fitness, health, productivity, skills, goals, null] }
+        priority: { type: string, enum: [high, normal, low], default: normal }
+        planned_for: { type: [string, "null"], format: date }
+        due_at: { type: [string, "null"], format: date-time }
+        assignment_id: { type: [string, "null"], format: uuid }
+    TaskPatch:
+      allOf:
+        - { $ref: "#/components/schemas/TaskInput" }
+        - type: object
+          properties:
+            completed_at: { type: [string, "null"], format: date-time }
+    Task:
+      allOf:
+        - { $ref: "#/components/schemas/Meta" }
+        - { $ref: "#/components/schemas/TaskPatch" }
+    Habit:
+      type: object
+      required: [id, name, days, streak, rate_28d]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        schedule: { type: array, items: { type: integer, minimum: 1, maximum: 7 } }
+        days: { type: array, items: { type: [boolean, "null"] }, description: "Oldest first; null = not scheduled or today, not yet scored" }
+        streak: { type: integer }
+        rate_28d: { type: number }
+    ProductivitySummary:
+      type: object
+      properties:
+        completion_7d: { type: object, properties: { planned: { type: integer }, completed: { type: integer } } }
+        completion_prev_7d: { type: object, properties: { planned: { type: integer }, completed: { type: integer } } }
+        week:
+          type: array
+          items:
+            type: object
+            properties:
+              date: { type: string, format: date }
+              items:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    title: { type: string }
+                    kind: { type: string, enum: [deadline, workout, exam, milestone, task] }
+                    done: { type: [boolean, "null"] }
+              adherence: { type: [object, "null"], properties: { planned: { type: integer }, completed: { type: integer } } }
+        focus_sessions: { type: array, items: { $ref: "#/components/schemas/FocusSession" } }
+        screen_vs_focus:
+          type: array
+          items:
+            type: object
+            properties:
+              date: { type: string, format: date }
+              screen_minutes: { type: [integer, "null"] }
+              focus_minutes: { type: integer }
+
+    # ── progression ──
+    Skill:
+      type: object
+      required: [key, name, progress, form]
+      properties:
+        key: { type: string }
+        name: { type: string }
+        lifetime_xp: { type: integer }
+        progress: { $ref: "#/components/schemas/LevelProgress" }
+        form: { $ref: "#/components/schemas/FormResult" }
+        last_award_at: { type: [string, "null"], format: date-time }
+    SkillDetail:
+      allOf:
+        - { $ref: "#/components/schemas/Skill" }
+        - type: object
+          properties:
+            activity_rule: { type: string }
+            outcome_rule: { type: string }
+            weekly_xp: { type: array, items: { type: object, properties: { week_start: { type: string, format: date }, xp: { type: integer } } } }
+            sources: { type: array, items: { type: object, properties: { reason: { type: string }, xp: { type: integer }, count: { type: integer } } } }
+    Attribute:
+      type: object
+      required: [key, label, score, coverage, signals]
+      properties:
+        key: { type: string, enum: [intelligence, strength, endurance, discipline, vitality] }
+        label: { type: string }
+        score: { type: [integer, "null"], minimum: 0, maximum: 100 }
+        coverage: { type: number, minimum: 0, maximum: 1 }
+        signals:
+          type: array
+          items:
+            type: object
+            required: [key, label, weight, score]
+            properties:
+              key: { type: string }
+              label: { type: string }
+              weight: { type: number }
+              score: { type: [integer, "null"] }
+              value: { type: [number, "null"] }
+              target: { type: [number, "null"] }
+    XpTransaction:
+      type: object
+      required: [id, at, amount, skill, reason, kind]
+      properties:
+        id: { type: string, format: uuid }
+        at: { type: string, format: date-time }
+        amount: { type: integer }
+        skill: { type: string }
+        reason: { type: string }
+        cap_note: { type: [string, "null"] }
+        kind: { type: string, enum: [award, correction] }
+        rule_id: { type: [string, "null"] }
+        rule_version: { type: [integer, "null"] }
+    XpRule:
+      type: object
+      properties:
+        id: { type: string }
+        version: { type: integer }
+        event_type: { type: string }
+        skill_key: { type: string }
+        params: { type: object }
+        description: { type: string }
+
+    # ── goals ──
+    GoalInput:
+      type: object
+      required: [title, metric, start_value, target_value, unit]
+      properties:
+        title: { type: string, maxLength: 200 }
+        metric: { type: string }
+        start_value: { type: number }
+        target_value: { type: number }
+        unit: { type: string, maxLength: 20 }
+        due_on: { type: [string, "null"], format: date }
+        milestones: { type: array, maxItems: 10, items: { type: object, properties: { label: { type: string }, value: { type: number } } } }
+    Goal:
+      allOf:
+        - { $ref: "#/components/schemas/Meta" }
+        - { $ref: "#/components/schemas/GoalInput" }
+        - type: object
+          properties:
+            current_value: { type: number }
+            status: { type: string, enum: [active, completed, abandoned] }
+            milestones:
+              type: array
+              items:
+                type: object
+                properties:
+                  label: { type: string }
+                  value: { type: number }
+                  reached_at: { type: [string, "null"], format: date-time }
+            projection:
+              type: object
+              properties:
+                rate_per_week: { type: [number, "null"] }
+                eta: { type: [string, "null"], format: date }
+                on_pace: { type: [boolean, "null"] }
+    Quest:
+      type: object
+      required: [id, period, period_start, title, current, target]
+      properties:
+        id: { type: string, format: uuid }
+        period: { type: string, enum: [day, week] }
+        period_start: { type: string, format: date }
+        title: { type: string }
+        metric: { type: string }
+        current: { type: number }
+        target: { type: number }
+        unit: { type: string }
+        origin: { type: string, enum: [manual, template, challenge] }
+        completed_at: { type: [string, "null"], format: date-time }
+    Challenge:
+      type: object
+      properties:
+        key: { type: string }
+        title: { type: string }
+        basis: { type: string }
+        rule: { type: string }
+        module: { type: string }
+    Achievement:
+      type: object
+      properties:
+        key: { type: string }
+        title: { type: string }
+        criteria: { type: string }
+        unlocked_at: { type: [string, "null"], format: date-time }
+        current: { type: number }
+        target: { type: number }
+        unit: { type: string }
+
+    # ── analytics ──
+    PeriodSummary:
+      type: object
+      properties:
+        current_label: { type: string }
+        previous_label: { type: string }
+        rows:
+          type: array
+          items:
+            type: object
+            properties:
+              key: { type: string }
+              label: { type: string }
+              unit: { type: string }
+              current: { type: [number, "null"] }
+              previous: { type: [number, "null"] }
+    Correlation:
+      type: object
+      required: [r, n, enough]
+      properties:
+        points: { type: array, items: { type: object, properties: { x: { type: number }, y: { type: number } } } }
+        r: { type: [number, "null"] }
+        n: { type: integer }
+        enough: { type: boolean, description: "n ≥ 10" }
+    Patterns:
+      type: object
+      properties:
+        trends:
+          type: array
+          items:
+            type: object
+            properties:
+              key: { type: string }
+              kind: { type: string, enum: [up, down, flat, plateau] }
+              title: { type: string }
+              detail: { type: string }
+              method: { type: string }
+        heatmap:
+          type: object
+          properties:
+            blocks: { type: array, items: { type: string } }
+            minutes: { type: array, items: { type: array, items: { type: integer } } }
+        sleep_study: { $ref: "#/components/schemas/Correlation" }
+        sleep_lift: { $ref: "#/components/schemas/Correlation" }
+        screen_focus: { $ref: "#/components/schemas/Correlation" }
+        volume_strength: { $ref: "#/components/schemas/Correlation" }
+    Insight:
+      type: object
+      required: [key, kind, title, detail, window, method]
+      properties:
+        key: { type: string }
+        kind: { type: string, enum: [correlation, trend, plateau] }
+        title: { type: string }
+        detail: { type: string }
+        window: { type: string }
+        method: { type: string }
+
+    # ── sync & settings ──
+    ChangeSet:
+      type: object
+      required: [changes, cursor, has_more]
+      properties:
+        changes:
+          type: array
+          items:
+            type: object
+            required: [entity, id, op]
+            properties:
+              entity: { type: string, examples: [task, study_session, workout_session, exercise_set, daily_log, habit_log] }
+              id: { type: string, format: uuid }
+              op: { type: string, enum: [upsert, delete] }
+              version: { type: integer }
+              data: { type: [object, "null"] }
+        cursor: { type: string }
+        has_more: { type: boolean }
+    Settings:
+      type: object
+      properties:
+        version: { type: integer }
+        timezone: { type: string }
+        week_start: { type: string, const: monday }
+        units: { type: object, properties: { weight: { const: kg }, distance: { const: km } } }
+        targets: { type: object, additionalProperties: { type: number } }
+        training_plan:
+          type: object
+          properties:
+            weekdays: { type: array, items: { type: integer, minimum: 1, maximum: 7 } }
+            rotation: { type: array, items: { type: string, format: uuid } }
+        reminders: { type: object, additionalProperties: { type: string, pattern: "^[0-2][0-9]:[0-5][0-9]$" } }
+    SettingsPatch:
+      type: object
+      properties:
+        timezone: { type: string }
+        targets: { type: object, additionalProperties: { type: number, exclusiveMinimum: 0 } }
+        training_plan:
+          type: object
+          properties:
+            weekdays: { type: array, items: { type: integer, minimum: 1, maximum: 7 } }
+            rotation: { type: array, items: { type: string, format: uuid } }
+        reminders: { type: object, additionalProperties: { type: string, pattern: "^[0-2][0-9]:[0-5][0-9]$" } }
