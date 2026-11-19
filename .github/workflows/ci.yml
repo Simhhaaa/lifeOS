@@ -56,3 +56,74 @@ jobs:
       - run: npx tsc --noEmit
       - run: npm run lint
       - run: npm run build
+
+  # Browser tests against the real API on a fresh database. The signing key and the owner's password
+  # are generated per run and never leave the runner.
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: lifeos
+          POSTGRES_PASSWORD: lifeos-local-only
+          POSTGRES_DB: lifeos_e2e
+        ports: ["54329:5432"]
+        options: >-
+          --health-cmd "pg_isready -U lifeos -d lifeos_e2e"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      LIFEOS_ENV: local
+      LIFEOS_DATABASE_URL: postgresql+asyncpg://lifeos:lifeos-local-only@127.0.0.1:54329/lifeos_e2e
+      LIFEOS_COOKIE_SECURE: "false"
+      LIFEOS_WEB_ORIGIN: http://localhost:3100
+      LIFEOS_DEV_OWNER_USERNAME: e2e
+      LIFEOS_DEV_OWNER_TIMEZONE: UTC
+      E2E_USERNAME: e2e
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install backend
+        working-directory: backend
+        run: pip install -e .
+      - name: Per-run signing key and owner password
+        working-directory: backend
+        run: |
+          { echo "LIFEOS_JWT_PRIVATE_KEY<<KEY_EOF"; python -m app.cli gen-key; echo; echo "KEY_EOF"; } >> "$GITHUB_ENV"
+          pw="$(openssl rand -hex 24)"
+          echo "::add-mask::$pw"
+          { echo "LIFEOS_DEV_OWNER_PASSWORD=$pw"; echo "E2E_PASSWORD=$pw"; } >> "$GITHUB_ENV"
+      - name: Migrate, seed the owner, start the API
+        working-directory: backend
+        run: |
+          alembic upgrade head
+          python scripts/dev_owner.py
+          nohup python -m uvicorn app.main:app --port 8000 > "$RUNNER_TEMP/api.log" 2>&1 &
+          for i in $(seq 1 30); do curl -s -o /dev/null http://127.0.0.1:8000/api/v1/tasks && exit 0; sleep 1; done
+          cat "$RUNNER_TEMP/api.log"; exit 1
+      - name: Install web and browser
+        working-directory: apps/web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Playwright
+        working-directory: apps/web
+        run: npx playwright test
+      - name: API log
+        if: failure()
+        run: cat "$RUNNER_TEMP/api.log"
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces
+          path: apps/web/test-results/
+          retention-days: 7

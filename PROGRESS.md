@@ -1,6 +1,77 @@
 # LIFEOS: progress log
 
-## Phase 3a · CI, real login, first live screens (awaiting review)
+## Phase 3b · Academics on the real API (awaiting review)
+
+**Scope:** the second Phase 3 slice. The whole Academics screen now runs on real data, with working logging. Fitness, Overview and the read views come next.
+
+### Done
+- **Backend** (`app/api/v1/academics.py`, `app/services/academics.py`, `app/schemas/academics.py`):
+  - **Subjects:** list, create, patch, delete. `units_done` can't exceed `units_total`; a duplicate short name gives 409.
+  - **Study and coding sessions:**
+    - A future start gives 422.
+    - `local_date` comes from the owner's timezone.
+    - A coding session and its solved problems are written in one transaction.
+  - **DSA problems:** a repeated problem URL gives 409.
+  - **Assignments, milestones and semesters:**
+    - Assignments: list, create, update.
+    - Milestones: learning and assessment go to `learning_milestones`, project to `coding_milestones`.
+    - Semesters: CGPA is computed on the server, weighted by credits.
+  - **`/study/analytics`:**
+    - study and coding hours, last 14 days vs the 14 before;
+    - per-subject figures over 28 days;
+    - a 7-day session timeline;
+    - DSA lifetime count, plus an 8-week breakdown by difficulty, topic and week;
+    - the next deadline.
+  - **Shared helpers** (`repositories/owned.py`):
+    - `require_ref`: a referenced subject that isn't yours gives 422, so another user's rows can't be read or linked;
+    - `insert_owned`: unique violations become 409 `duplicate`;
+    - `local_date_for` / `today_for`.
+  - Clients still never send XP. Session XP waits for the Phase 5 engine, and the UI says so.
+- **Web** (`components/live/academics/`, `components/ui/form.tsx`): every Academics panel is live.
+  - Stat strip.
+  - Subjects table, with a +/− unit stepper that uses If-Match.
+  - Assignments, with the status changed from the chip.
+  - Session timeline.
+  - DSA progress.
+  - Milestones (tick to complete or undo).
+  - Semester record, with inline SGPA edit.
+  - Dialogs: log session (study or coding, with solved problems), subject, assignment, milestone, semester, problem.
+  - Loading, empty and error states throughout; conflict and validation errors are shown inline.
+  - On narrow widths the header now wraps its actions instead of squeezing the description.
+- **UI test:** `e2e/academics.spec.ts` covers:
+  - subject, then a unit step;
+  - session, which shows in the subject's 28-day figures;
+  - assignment, then a status change;
+  - DSA problem: the count goes up, and the same URL a second time is refused;
+  - milestone, ticked done;
+  - semester, then an SGPA edit that persists after a reload.
+- **CI:** a new **e2e** job runs on a fresh Postgres.
+  - It migrates, seeds an owner, starts uvicorn and runs Playwright.
+  - The signing key and password are generated for each run and masked; no secrets are stored.
+  - On failure it uploads traces.
+
+### Contract additions — need your sign-off (additive only; nothing existing changed)
+The approved screens need these operations, which the Phase 1 contract lacked. They're added to `docs/api/openapi.yaml` (now 63 operations):
+1. `GET /milestones` (listMilestones): the Milestones panel.
+2. `PATCH /milestones/{id}` (updateMilestone): tick done, or record a score.
+3. `POST /semesters` and `PATCH /semesters/{id}` (createSemester, updateSemester): add a semester and edit its SGPA.
+
+Also, `PATCH /subjects/{id}` now takes a `SubjectPatch` (every field optional) rather than the full `SubjectInput`.
+
+### Verification
+- **Backend:** pytest **44 passed** (10 new academics tests); ruff clean.
+  - Mutation check: with `require_ref` disabled, the ownership test fails as it should.
+- **Web:** `tsc` and eslint clean.
+- **Playwright:** **4 passed** (3 existing + academics) against the real API and Postgres.
+- Screenshots of the populated page checked at 1440 px and at narrow width.
+- **Note on local runs:** the e2e tests sign in as the local dev owner. Only subjects can be deleted through the API, so a local run leaves records named "E2E …" on that account. CI uses a fresh database.
+
+### Next (only after approval)
+- Phase 3c: Fitness (workouts, sets, cardio, body measurements, training plan) on the real API, in the same pattern.
+
+---
+
+## Phase 3a · CI, real login, first live screens (approved, merged; CI green)
 
 **Scope:** the first slice of Phase 3 (desktop web).
 - **Here:** CI; login and session; Productivity → Plan and Health → Readiness on the real API.

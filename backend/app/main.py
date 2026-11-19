@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import auth, daily_logs, sync, tasks
+from app.api.v1 import academics, auth, daily_logs, sync, tasks
 from app.core import errors
 from app.core.config import get_settings
 from app.core.db import dispose
@@ -37,7 +37,7 @@ def create_app() -> FastAPI:
         allow_headers=["Content-Type", "Authorization", "Idempotency-Key", "If-Match", "X-CSRF-Token"],
     )
     errors.install(app)
-    for module in (auth, tasks, daily_logs, sync):
+    for module in (auth, tasks, daily_logs, academics, sync):
         app.include_router(module.router, prefix=API_PREFIX)
 
     @app.get("/healthz", include_in_schema=False)

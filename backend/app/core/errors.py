@@ -22,9 +22,10 @@ class ApiError(Exception):
         *,
         current: dict[str, Any] | None = None,
         headers: dict[str, str] | None = None,
+        errors: list[dict[str, str]] | None = None,
     ) -> None:
         self.status, self.code, self.title, self.detail = status, code, title, detail
-        self.current, self.headers = current, headers
+        self.current, self.headers, self.errors = current, headers, errors
 
 
 def not_found(what: str = "Resource") -> ApiError:
@@ -63,7 +64,7 @@ def install(app: FastAPI) -> None:
     @app.exception_handler(ApiError)
     async def _api_error(_: Request, exc: ApiError) -> JSONResponse:
         return JSONResponse(
-            _body(exc.status, exc.code, exc.title, exc.detail, current=exc.current),
+            _body(exc.status, exc.code, exc.title, exc.detail, current=exc.current, errors=exc.errors),
             status_code=exc.status,
             media_type=PROBLEM,
             headers=exc.headers,

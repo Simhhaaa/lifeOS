@@ -143,7 +143,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/SubjectInput" }
+            schema: { $ref: "#/components/schemas/SubjectPatch" }
       responses:
         "200":
           description: Updated
@@ -281,6 +281,16 @@ paths:
               schema: { $ref: "#/components/schemas/Assignment" }
         "409": { $ref: "#/components/responses/Conflict" }
   /milestones:
+    get:
+      tags: [academics]
+      operationId: listMilestones
+      summary: Learning, assessment and project milestones; completed first (newest), then planned by date. (Added in Phase 3b.)
+      responses:
+        "200":
+          description: Milestones
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Milestone" } }
     post:
       tags: [academics]
       operationId: createMilestone
@@ -297,6 +307,25 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Milestone" }
+  /milestones/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    patch:
+      tags: [academics]
+      operationId: updateMilestone
+      summary: Edit or complete a milestone (`completed_at`). (Added in Phase 3b.)
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }, { $ref: "#/components/parameters/IfMatch" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MilestonePatch" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Milestone" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /semesters:
     get:
       tags: [academics]
@@ -312,6 +341,42 @@ paths:
                 properties:
                   semesters: { type: array, items: { $ref: "#/components/schemas/Semester" } }
                   cgpa: { type: [number, "null"] }
+    post:
+      tags: [academics]
+      operationId: createSemester
+      summary: Add a semester record. (Added in Phase 3b.)
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SemesterInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Semester" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /semesters/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    patch:
+      tags: [academics]
+      operationId: updateSemester
+      summary: Edit a semester (e.g. enter the SGPA when results arrive). (Added in Phase 3b.)
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }, { $ref: "#/components/parameters/IfMatch" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SemesterPatch" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Semester" }
+        "409": { $ref: "#/components/responses/Conflict" }
 
   # ───────────────────────── fitness ─────────────────────────
   /exercises:
@@ -1250,6 +1315,40 @@ components:
       allOf:
         - { $ref: "#/components/schemas/Meta" }
         - { $ref: "#/components/schemas/MilestoneInput" }
+    SubjectPatch:
+      type: object
+      description: Partial update; units_done may not exceed units_total after the change.
+      properties:
+        name: { type: string, maxLength: 120 }
+        short_name: { type: string, maxLength: 12 }
+        credits: { type: integer, minimum: 0, maximum: 30 }
+        units_total: { type: integer, minimum: 0, maximum: 100 }
+        units_done: { type: integer, minimum: 0, maximum: 100 }
+        semester_id: { type: [string, "null"], format: uuid }
+    MilestonePatch:
+      type: object
+      properties:
+        title: { type: string, maxLength: 200 }
+        planned_for: { type: [string, "null"], format: date }
+        completed_at: { type: [string, "null"], format: date-time }
+        score: { type: [number, "null"] }
+        max_score: { type: [number, "null"] }
+    SemesterInput:
+      type: object
+      required: [label, ordinal]
+      properties:
+        label: { type: string, maxLength: 40 }
+        ordinal: { type: integer, minimum: 1, maximum: 20 }
+        credits: { type: [integer, "null"], minimum: 0, maximum: 60 }
+        sgpa: { type: [number, "null"], minimum: 0, maximum: 10 }
+        is_current: { type: boolean, default: false }
+    SemesterPatch:
+      type: object
+      properties:
+        label: { type: string, maxLength: 40 }
+        credits: { type: [integer, "null"], minimum: 0, maximum: 60 }
+        sgpa: { type: [number, "null"], minimum: 0, maximum: 10 }
+        is_current: { type: boolean }
     Semester:
       type: object
       required: [id, label, ordinal]

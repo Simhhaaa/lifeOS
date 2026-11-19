@@ -1,5 +1,5 @@
-import { AcademicsPage } from "@/components/modules/academics-page";
+import { AcademicsLive } from "@/components/live/academics/academics-live";
 
 export default function Page() {
-  return <AcademicsPage />;
+  return <AcademicsLive />;
 }
