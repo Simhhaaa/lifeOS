@@ -60,7 +60,8 @@ jobs:
   # Browser tests against the real API on a fresh database. The signing key and the owner's password
   # are generated per run and never leave the runner.
   e2e:
-    runs-on: ubuntu-latest
+    # Pinned: Playwright 1.56's `install --with-deps` only knows Ubuntu releases up to 24.04.
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:16-alpine
