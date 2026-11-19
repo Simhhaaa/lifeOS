@@ -1,6 +1,7 @@
 """Settings from environment variables only (spec §8: no secrets in code)."""
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, SecretStr
@@ -8,7 +9,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="LIFEOS_", env_file=".env", extra="ignore")
+    # backend/.env, wherever the process is started from (environment variables still win).
+    model_config = SettingsConfigDict(
+        env_prefix="LIFEOS_", env_file=Path(__file__).resolve().parents[2] / ".env", extra="ignore"
+    )
 
     env: Literal["local", "test", "preview", "production"] = "local"
     database_url: str = Field(description="postgresql+asyncpg://user:pass@host:port/db")

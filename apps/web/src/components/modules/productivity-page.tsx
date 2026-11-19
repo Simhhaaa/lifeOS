@@ -1,91 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import { Bar as RBar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Checkbox } from "radix-ui";
-import { CalendarDays, Check, Hourglass, ListTodo, MonitorSmartphone, Repeat } from "lucide-react";
+import { CalendarDays, Check, Hourglass, MonitorSmartphone, Repeat } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 import { Chip } from "@/components/ui/chip";
 import { MethodInfo } from "@/components/ui/info";
 import { AXIS, ChartTip, GRID, Legend } from "@/components/ui/chart";
 import { Module } from "@/components/dashboard/module";
+import { LiveTasks } from "@/components/live/live-tasks";
 import { PageHeader } from "@/components/page/page-header";
 import { Change, StatStrip } from "@/components/page/stat-strip";
 import { WEEKDAY_SHORT, formatTime, startOfDay, weekdayIndex } from "@/lib/dates";
-import type { PlannedTask } from "@/lib/sample/productivity";
 import { mean } from "@/lib/stats";
 
 const dayLabel = (d: Date) => `${WEEKDAY_SHORT[weekdayIndex(d)].slice(0, 2)} ${d.getDate()}`;
-
-/* ───────────── Plan ───────────── */
-
-function TaskGroups({ initial }: { initial: PlannedTask[] }) {
-  // Local-only toggles for the design preview.
-  const [tasks, setTasks] = useState(initial);
-  const groups: { key: PlannedTask["day"]; label: string }[] = [
-    { key: "today", label: "Today" },
-    { key: "tomorrow", label: "Tomorrow" },
-    { key: "later", label: "Later this week" },
-  ];
-  return (
-    <div className="flex flex-col gap-4">
-      {groups.map((g) => {
-        const items = tasks.filter((t) => t.day === g.key);
-        const done = items.filter((t) => t.done).length;
-        return (
-          <section key={g.key} aria-label={g.label}>
-            <p className="mb-1 flex justify-between text-xs">
-              <span className="font-medium text-ink-2">{g.label}</span>
-              <span className="num text-ink-3">
-                {done}/{items.length}
-              </span>
-            </p>
-            <ul className="-mx-2 flex flex-col">
-              {items.map((t) => (
-                <li key={t.id}>
-                  <label className="group flex min-h-11 cursor-pointer items-center gap-3 rounded-box px-2 py-1.5 transition hover:bg-well/60">
-                    <Checkbox.Root
-                      checked={t.done}
-                      onCheckedChange={(c) => setTasks((ts) => ts.map((x) => (x.id === t.id ? { ...x, done: c === true } : x)))}
-                      className="grid h-5 w-5 shrink-0 place-items-center rounded-full border-[1.5px] border-edge-strong transition group-hover:border-ink-3 data-[state=checked]:border-mint data-[state=checked]:bg-mint"
-                    >
-                      <Checkbox.Indicator>
-                        <Check size={12} strokeWidth={3} className="text-base" />
-                      </Checkbox.Indicator>
-                    </Checkbox.Root>
-                    <span className="min-w-0 flex-1">
-                      <span className={cn("block truncate text-sm", t.done ? "text-ink-3 line-through" : "text-ink")}>{t.title}</span>
-                      <span className="block truncate text-2xs text-ink-3">{t.meta}</span>
-                    </span>
-                    {t.priority === "high" && !t.done && <Chip tone="saffron">High</Chip>}
-                    {t.priority === "low" && !t.done && <Chip>Low</Chip>}
-                  </label>
-                </li>
-              ))}
-            </ul>
-          </section>
-        );
-      })}
-      <p className="text-2xs text-ink-3">Ticks are not saved in Phase 0.</p>
-    </div>
-  );
-}
-
-function Plan() {
-  return (
-    <Module
-      framed
-      title="Plan"
-      subtitle="Tasks and priorities · today, tomorrow and later this week"
-      className="xl:col-span-5"
-      skeleton={{ rows: 7 }}
-      empty={{ icon: ListTodo, title: "Nothing planned", description: "Plan 3–5 items a day so consistency is measured against your intent.", action: "Add task" }}
-    >
-      {(d) => <TaskGroups initial={d.productivity.tasks} />}
-    </Module>
-  );
-}
 
 /* ───────────── Week agenda ───────────── */
 
@@ -341,7 +270,7 @@ export function ProductivityPage() {
       <PageHeader
         title="Productivity"
         description="Daily planning, focus, habits and deadlines. Consistency is measured against what you planned, not how busy you were."
-        action="Add task"
+        live={["Plan"]}
       />
       <StatStrip
         labels={["Planned items done, 7 days", "Focus time this week", "Habit completion, 28 days", "Screen time, 7-day average"]}
@@ -383,7 +312,7 @@ export function ProductivityPage() {
         }}
       />
       <div className="grid gap-5 xl:grid-cols-12">
-        <Plan />
+        <LiveTasks className="xl:col-span-5" />
         <div className="flex flex-col gap-5 xl:col-span-7">
           <Week />
           <Focus />

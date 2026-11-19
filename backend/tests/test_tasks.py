@@ -40,7 +40,9 @@ async def test_same_key_different_body_is_rejected(client: httpx.AsyncClient, au
 
 async def test_concurrent_duplicates_write_once(client: httpx.AsyncClient, auth) -> None:
     k, body = key(), {"title": "Offline replay"}
-    results = await asyncio.gather(*[client.post("/tasks", json=body, headers={**auth, "Idempotency-Key": k}) for _ in range(5)])
+    results = await asyncio.gather(
+        *[client.post("/tasks", json=body, headers={**auth, "Idempotency-Key": k}) for _ in range(5)]
+    )
     assert {r.status_code for r in results} == {201}
     assert len({r.json()["id"] for r in results}) == 1
     assert await _count_tasks() == 1
@@ -70,7 +72,9 @@ async def test_validation_and_unknown_fields(client: httpx.AsyncClient, auth) ->
 async def test_optimistic_concurrency(client: httpx.AsyncClient, auth) -> None:
     t = (await client.post("/tasks", json={"title": "Read"}, headers={**auth, "Idempotency-Key": key()})).json()
     ok = await client.patch(
-        f"/tasks/{t['id']}", json={"title": "Read 20 pages"}, headers={**auth, "Idempotency-Key": key(), "If-Match": "1"}
+        f"/tasks/{t['id']}",
+        json={"title": "Read 20 pages"},
+        headers={**auth, "Idempotency-Key": key(), "If-Match": "1"},
     )
     assert ok.status_code == 200 and ok.json()["version"] == 2
 
@@ -81,7 +85,9 @@ async def test_optimistic_concurrency(client: httpx.AsyncClient, auth) -> None:
     assert stale.json()["code"] == "version_conflict"
     assert stale.json()["current"]["title"] == "Read 20 pages"  # server copy, never silently overwritten
 
-    no_if_match = await client.patch(f"/tasks/{t['id']}", json={"title": "z"}, headers={**auth, "Idempotency-Key": key()})
+    no_if_match = await client.patch(
+        f"/tasks/{t['id']}", json={"title": "z"}, headers={**auth, "Idempotency-Key": key()}
+    )
     assert no_if_match.status_code == 422
 
 
@@ -104,7 +110,9 @@ async def test_complete_and_delete_then_gone(client: httpx.AsyncClient, auth) ->
 
 async def test_duplicate_client_id_with_new_key(client: httpx.AsyncClient, auth) -> None:
     tid = str(uuid.uuid4())
-    assert (await client.post("/tasks", json={"id": tid, "title": "a"}, headers={**auth, "Idempotency-Key": key()})).status_code == 201
+    assert (
+        await client.post("/tasks", json={"id": tid, "title": "a"}, headers={**auth, "Idempotency-Key": key()})
+    ).status_code == 201
     dup = await client.post("/tasks", json={"id": tid, "title": "b"}, headers={**auth, "Idempotency-Key": key()})
     assert dup.status_code == 409 and dup.json()["code"] == "duplicate"
 
@@ -113,9 +121,13 @@ async def test_ownership_isolation(client: httpx.AsyncClient, auth, other_user) 
     mine = (await client.post("/tasks", json={"title": "private"}, headers={**auth, "Idempotency-Key": key()})).json()
     theirs = await bearer(client, "intruder")
     assert (await client.get("/tasks", headers=theirs)).json() == []
-    r = await client.patch(f"/tasks/{mine['id']}", json={"title": "hacked"}, headers={**theirs, "Idempotency-Key": key(), "If-Match": "1"})
+    r = await client.patch(
+        f"/tasks/{mine['id']}", json={"title": "hacked"}, headers={**theirs, "Idempotency-Key": key(), "If-Match": "1"}
+    )
     assert r.status_code == 404  # never 403: existence is not revealed
-    missing = await client.patch(f"/tasks/{uuid.uuid4()}", json={"title": "x"}, headers={**theirs, "Idempotency-Key": key(), "If-Match": "1"})
+    missing = await client.patch(
+        f"/tasks/{uuid.uuid4()}", json={"title": "x"}, headers={**theirs, "Idempotency-Key": key(), "If-Match": "1"}
+    )
     assert missing.status_code == 404 and missing.json() == r.json()
     # Same idempotency key used by two different users does not collide.
     k = key()

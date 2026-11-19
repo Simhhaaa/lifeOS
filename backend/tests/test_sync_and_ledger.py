@@ -52,14 +52,38 @@ async def test_bad_cursor(client: httpx.AsyncClient, auth) -> None:
 
 async def _seed_award(user_id: uuid.UUID) -> uuid.UUID:
     async with sessionmaker()() as s, s.begin():
-        s.add(XpRule(id="study.focus_minutes", version=1, event_type="study_session.logged", skill_key="learning",
-                     params={"per_minutes": 3, "session_cap": 60}, valid_from=datetime.now(UTC), description="test"))
-        ev = ActivityEvent(user_id=user_id, type="study_session.logged", source_table="study_sessions",
-                           source_id=uuid.uuid4(), occurred_at=datetime.now(UTC), local_date=date.today(), payload={"minutes": 90})
+        s.add(
+            XpRule(
+                id="study.focus_minutes",
+                version=1,
+                event_type="study_session.logged",
+                skill_key="learning",
+                params={"per_minutes": 3, "session_cap": 60},
+                valid_from=datetime.now(UTC),
+                description="test",
+            )
+        )
+        ev = ActivityEvent(
+            user_id=user_id,
+            type="study_session.logged",
+            source_table="study_sessions",
+            source_id=uuid.uuid4(),
+            occurred_at=datetime.now(UTC),
+            local_date=date.today(),
+            payload={"minutes": 90},
+        )
         s.add(ev)
         await s.flush()
-        tx = XpTransaction(user_id=user_id, event_id=ev.id, rule_id="study.focus_minutes", rule_version=1,
-                           skill_key="learning", amount=30, kind="award", reason="Focused study · 90 min")
+        tx = XpTransaction(
+            user_id=user_id,
+            event_id=ev.id,
+            rule_id="study.focus_minutes",
+            rule_version=1,
+            skill_key="learning",
+            amount=30,
+            kind="award",
+            reason="Focused study · 90 min",
+        )
         s.add(tx)
         await s.flush()
         return tx.id
@@ -67,7 +91,10 @@ async def _seed_award(user_id: uuid.UUID) -> uuid.UUID:
 
 async def test_xp_ledger_is_append_only(owner) -> None:
     tx_id = await _seed_award(owner)
-    for stmt in ("UPDATE xp_transactions SET amount = 999 WHERE id = :id", "DELETE FROM xp_transactions WHERE id = :id"):
+    for stmt in (
+        "UPDATE xp_transactions SET amount = 999 WHERE id = :id",
+        "DELETE FROM xp_transactions WHERE id = :id",
+    ):
         with pytest.raises(DBAPIError, match="append-only"):
             async with sessionmaker()() as s, s.begin():
                 await s.execute(text(stmt), {"id": tx_id})
@@ -76,8 +103,18 @@ async def test_xp_ledger_is_append_only(owner) -> None:
 async def test_one_award_per_event_and_rule(owner) -> None:
     await _seed_award(owner)
     async with sessionmaker()() as s:
-        ev_id, = (await s.execute(text("SELECT id FROM activity_events"))).one()
+        (ev_id,) = (await s.execute(text("SELECT id FROM activity_events"))).one()
     with pytest.raises(DBAPIError):
         async with sessionmaker()() as s, s.begin():
-            s.add(XpTransaction(user_id=owner, event_id=ev_id, rule_id="study.focus_minutes", rule_version=1,
-                                skill_key="learning", amount=30, kind="award", reason="duplicate"))
+            s.add(
+                XpTransaction(
+                    user_id=owner,
+                    event_id=ev_id,
+                    rule_id="study.focus_minutes",
+                    rule_version=1,
+                    skill_key="learning",
+                    amount=30,
+                    kind="award",
+                    reason="duplicate",
+                )
+            )

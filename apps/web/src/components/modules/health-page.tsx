@@ -1,18 +1,17 @@
 "use client";
 
 import { Bar as RBar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Activity, Droplets, Footprints, HeartPulse, ListChecks, Moon, Smile } from "lucide-react";
+import { Droplets, Footprints, HeartPulse, ListChecks, Moon, Smile } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 import { Chip } from "@/components/ui/chip";
-import { MethodInfo } from "@/components/ui/info";
-import { Pips } from "@/components/ui/progress";
 import { AXIS, ChartTip, GRID, Legend } from "@/components/ui/chart";
 import { EmptyState } from "@/components/ui/states";
 import { Module } from "@/components/dashboard/module";
+import { LiveCheckIn } from "@/components/live/live-checkin";
 import { PageHeader } from "@/components/page/page-header";
 import { Change, StatStrip } from "@/components/page/stat-strip";
-import { WEEKDAY_SHORT, formatRelativeDay, formatShortDate, weekdayIndex } from "@/lib/dates";
-import { SLEEP_TARGET_H, scalePoints, sleepPoints } from "@/lib/progression";
+import { WEEKDAY_SHORT, formatRelativeDay, weekdayIndex } from "@/lib/dates";
+import { SLEEP_TARGET_H } from "@/lib/progression";
 
 const fmtH = (h: number) => `${Math.floor(h)}h ${String(Math.round((h % 1) * 60)).padStart(2, "0")}m`;
 const STEPS_TARGET = 8000;
@@ -94,88 +93,6 @@ function Sleep() {
                   />
                 ))}
               </div>
-            </div>
-          </div>
-        );
-      }}
-    </Module>
-  );
-}
-
-/* ───────────── Readiness ───────────── */
-
-function Readiness() {
-  return (
-    <Module
-      framed
-      title="Readiness"
-      subtitle="Today and the last 14 days · from the daily check-in"
-      className="xl:col-span-4"
-      skeleton={{ rows: 4 }}
-      actions={() => (
-        <MethodInfo label="readiness">
-          Sleep ≥ {SLEEP_TARGET_H} h = 2 points, ≥ {SLEEP_TARGET_H - 1} h = 1. Energy and recovery (1–5): 4+ = 2, 3 = 1.
-          Total 5–6 High, 3–4 Moderate, 0–2 Low. Needs all three inputs. A planning aid, not medical advice.
-        </MethodInfo>
-      )}
-      empty={{ icon: Activity, title: "No check-ins", description: "Readiness needs sleep, energy and recovery for the day." }}
-    >
-      {(d) => {
-        const today = d.health.days[d.health.days.length - 1];
-        const last14 = d.health.days.slice(-14);
-        const count = (l: string) => last14.filter((x) => x.readiness?.level === l).length;
-        const inputs = [
-          { label: "Sleep", value: today.sleepH === null ? "—" : fmtH(today.sleepH), pts: today.sleepH === null ? null : sleepPoints(today.sleepH) },
-          { label: "Energy", value: `${today.energy ?? "—"}/5`, pts: today.energy === null ? null : scalePoints(today.energy) },
-          { label: "Recovery", value: `${today.recovery ?? "—"}/5`, pts: today.recovery === null ? null : scalePoints(today.recovery) },
-        ];
-        return (
-          <div className="flex flex-col gap-4">
-            <p className="flex items-baseline gap-2">
-              <span
-                className={cn(
-                  "font-display text-[30px] leading-8 font-semibold tracking-[-0.03em]",
-                  today.readiness?.level === "High" ? "text-mint" : today.readiness?.level === "Low" ? "text-coral" : "text-ink",
-                )}
-              >
-                {today.readiness?.level ?? "Incomplete"}
-              </span>
-              {today.readiness && <span className="num text-xs text-ink-3">{today.readiness.points} of 6 points today</span>}
-            </p>
-            <ul className="flex flex-col gap-2">
-              {inputs.map((i) => (
-                <li key={i.label} className="flex items-center gap-3 text-xs">
-                  <span className="w-16 text-ink-3">{i.label}</span>
-                  <span className="num flex-1 text-ink">{i.value}</span>
-                  {i.pts !== null && <Pips current={i.pts} target={2} size="sm" label={`${i.label}: ${i.pts} of 2 points`} />}
-                </li>
-              ))}
-            </ul>
-            <div>
-              <p className="mb-1.5 text-xs text-ink-2">Last 14 days</p>
-              <div className="flex gap-1">
-                {last14.map((x) => (
-                  <span
-                    key={x.date.getTime()}
-                    title={`${formatShortDate(x.date)}: ${x.readiness?.level ?? "incomplete"}`}
-                    className={cn(
-                      "grid h-7 flex-1 place-items-center rounded-[6px] text-[10px] font-medium",
-                      x.readiness?.level === "High"
-                        ? "bg-mint-soft text-mint"
-                        : x.readiness?.level === "Low"
-                          ? "bg-coral-soft text-coral"
-                          : x.readiness
-                            ? "bg-well text-ink-2"
-                            : "hatch text-edge-strong",
-                    )}
-                  >
-                    <span className={x.readiness ? "" : "text-ink-3"}>{x.readiness?.level[0] ?? "–"}</span>
-                  </span>
-                ))}
-              </div>
-              <p className="num mt-1.5 text-2xs text-ink-3">
-                High {count("High")} · Moderate {count("Moderate")} · Low {count("Low")}
-              </p>
             </div>
           </div>
         );
@@ -386,13 +303,12 @@ export function HealthPage() {
       <PageHeader
         title="Health & recovery"
         description="Sleep, activity, mood, energy and recovery from your own logs. This is a self-tracking view, not medical advice."
-        action="Daily check-in"
+        live={["Readiness"]}
       />
       <StatStrip
-        labels={["Sleep, 14-night average", "Steps, 14-day average", "Readiness today", "Resting heart rate"]}
+        labels={["Sleep, 14-night average", "Steps, 14-day average", "Runs, 28 days", "Resting heart rate"]}
         stats={(d) => {
           const h = d.health;
-          const today = h.days[h.days.length - 1];
           return [
             {
               label: "Sleep, 14-night average",
@@ -404,14 +320,18 @@ export function HealthPage() {
               value: h.stepsAvg14 === null ? "—" : Math.round(h.stepsAvg14).toLocaleString(),
               note: <Change now={h.stepsAvg14} prev={h.prevStepsAvg14} suffix={`vs prior 14 · target ${STEPS_TARGET.toLocaleString()}`} />,
             },
-            { label: "Readiness today", value: today.readiness?.level ?? "—", accent: true, note: today.readiness ? `${today.readiness.points} of 6 points` : "check-in incomplete" },
+            {
+              label: "Runs, 28 days",
+              value: String(h.runs.length),
+              note: `${h.runs.reduce((a, r) => a + r.km, 0).toFixed(1)} km logged`,
+            },
             { label: "Resting heart rate", value: "—", note: "not logged yet" },
           ];
         }}
       />
       <div className="grid gap-5 xl:grid-cols-12">
         <Sleep />
-        <Readiness />
+        <LiveCheckIn className="xl:col-span-4" />
         <Activity28 />
         <Feelings />
         <RestingHr />

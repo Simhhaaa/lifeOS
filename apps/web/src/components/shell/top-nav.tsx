@@ -1,15 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { DropdownMenu } from "radix-ui";
-import { ChevronDown, Plus, Search, User } from "lucide-react";
+import { ChevronDown, LogOut, Plus, Search, User } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/info";
 import { Ring } from "@/components/ui/progress";
 import { usePreview } from "@/lib/preview-store";
 import { useIsMac } from "@/lib/use-media-query";
+import { useSession } from "@/lib/session";
 import { Brand } from "./brand";
 import { ALL_NAV, LOG_ACTIONS, PRIMARY_NAV, activeNav } from "./nav";
 
@@ -99,6 +100,42 @@ function LevelPill() {
   );
 }
 
+function ProfileMenu() {
+  const { user, logout } = useSession();
+  const router = useRouter();
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <button
+          type="button"
+          aria-label={`Account: ${user?.username ?? ""}`}
+          className="grid h-9 w-9 place-items-center rounded-full border border-edge-strong text-ink-2 transition hover:text-ink"
+        >
+          <User size={15} strokeWidth={1.75} aria-hidden />
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content align="end" sideOffset={8} className={menuCls}>
+          <div className="px-2.5 pt-1.5 pb-2">
+            <p className="text-sm text-ink">{user?.display_name ?? user?.username}</p>
+            <p className="text-2xs text-ink-3">{user?.timezone}</p>
+          </div>
+          <DropdownMenu.Separator className="my-1 h-px bg-edge" />
+          <DropdownMenu.Item
+            className={itemCls}
+            onSelect={async () => {
+              await logout();
+              router.replace("/login");
+            }}
+          >
+            <LogOut size={15} aria-hidden /> Log out
+          </DropdownMenu.Item>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
 export function TopNav({ onOpenPalette }: { onOpenPalette: () => void }) {
   const isMac = useIsMac();
   return (
@@ -146,15 +183,7 @@ export function TopNav({ onOpenPalette }: { onOpenPalette: () => void }) {
             </DropdownMenu.Portal>
           </DropdownMenu.Root>
 
-          <Tooltip content="Profile — not available in Phase 0. Local preview, nothing is synced.">
-            <span
-              tabIndex={0}
-              aria-label="Profile (local preview, not synced)"
-              className="grid h-9 w-9 place-items-center rounded-full border border-edge-strong text-ink-3"
-            >
-              <User size={15} strokeWidth={1.75} aria-hidden />
-            </span>
-          </Tooltip>
+          <ProfileMenu />
         </div>
       </div>
     </header>

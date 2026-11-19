@@ -37,7 +37,9 @@ async def test_unauthenticated_and_bad_token(client: httpx.AsyncClient) -> None:
 
 
 async def test_refresh_rotation_and_reuse_revokes_family(client: httpx.AsyncClient, owner) -> None:
-    first = (await client.post("/auth/login", json={"username": "owner", "password": PASSWORD, "client": "mobile"})).json()
+    first = (
+        await client.post("/auth/login", json={"username": "owner", "password": PASSWORD, "client": "mobile"})
+    ).json()
     second = await client.post("/auth/refresh", json={"refresh_token": first["refresh_token"]})
     assert second.status_code == 200
     new_refresh = second.json()["refresh_token"]
@@ -52,9 +54,13 @@ async def test_refresh_rotation_and_reuse_revokes_family(client: httpx.AsyncClie
 
 
 async def test_logout_revokes_refresh(client: httpx.AsyncClient, owner) -> None:
-    tokens = (await client.post("/auth/login", json={"username": "owner", "password": PASSWORD, "client": "mobile"})).json()
+    tokens = (
+        await client.post("/auth/login", json={"username": "owner", "password": PASSWORD, "client": "mobile"})
+    ).json()
     headers = {"Authorization": f"Bearer {tokens['access_token']}"}
-    assert (await client.post("/auth/logout", headers=headers, json={"refresh_token": tokens["refresh_token"]})).status_code == 204
+    assert (
+        await client.post("/auth/logout", headers=headers, json={"refresh_token": tokens["refresh_token"]})
+    ).status_code == 204
     assert (await client.post("/auth/refresh", json={"refresh_token": tokens["refresh_token"]})).status_code == 401
 
 

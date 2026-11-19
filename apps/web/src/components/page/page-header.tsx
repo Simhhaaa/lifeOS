@@ -5,6 +5,7 @@ import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SampleChip } from "@/components/ui/chip";
 import { usePreview } from "@/lib/preview-store";
+import { LiveChip } from "@/components/live/live-panel";
 
 /** Module page header: title, one-line purpose, sample notice and the module's primary (disabled) action. */
 export function PageHeader({
@@ -12,6 +13,7 @@ export function PageHeader({
   description,
   action,
   children,
+  live,
 }: {
   title: string;
   description: string;
@@ -19,6 +21,8 @@ export function PageHeader({
   action?: string;
   /** extra controls on the right (e.g. a period switch) */
   children?: ReactNode;
+  /** names of panels that show real data; the rest of the page is sample data */
+  live?: string[];
 }) {
   const { state } = usePreview();
   return (
@@ -32,7 +36,14 @@ export function PageHeader({
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {children}
-        {state === "ready" && <SampleChip />}
+        {live?.length ? (
+          <span className="flex items-center gap-2">
+            <LiveChip />
+            <span className="text-2xs text-ink-3">{live.join(", ")} · other panels are sample data</span>
+          </span>
+        ) : (
+          state === "ready" && <SampleChip />
+        )}
         {action && (
           <Button variant="primary" disabled title="Logging flows are designed after the screens are approved">
             <Plus size={15} strokeWidth={2.5} aria-hidden />

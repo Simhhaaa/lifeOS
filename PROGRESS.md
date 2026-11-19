@@ -1,6 +1,66 @@
 # LIFEOS: progress log
 
-## Phase 2 · Backend foundation (awaiting review)
+## Phase 3a · CI, real login, first live screens (awaiting review)
+
+**Scope:** the first slice of Phase 3 (desktop web).
+- **Here:** CI; login and session; Productivity → Plan and Health → Readiness on the real API.
+- **Later slices:** Academics, Fitness and Overview endpoints and screens, then the Skills, Goals and Analytics read views. Those show empty states until the Phase 5 progression engine.
+
+### Done
+- **CI** (`.github/workflows/ci.yml`):
+  - **backend:** ruff lint and format check, plus pytest against a Postgres 16 service (includes the OpenAPI contract test and `alembic check`);
+  - **web:** `tsc`, eslint, `next build`.
+- **Web ↔ API:**
+  - `next.config.ts` proxies `/api/v1/*` to FastAPI (`LIFEOS_API_ORIGIN`, default `127.0.0.1:8000`), so the httpOnly cookies are same-origin.
+  - `lib/api/client.ts`:
+    - sends CSRF on every mutation and a fresh `Idempotency-Key` per action;
+    - sends `If-Match` versions;
+    - retries once after a 401, with a shared refresh;
+    - turns problem+json into `ApiError`, and handles non-JSON proxy errors.
+  - `lib/api/use-resource.ts`: fetch, reload and optimistic updates.
+- **Login and session:**
+  - `/login` page (no sign-up). Error messages never reveal whether a username exists.
+  - The app shell sends every other route to `/login?next=…`, and shows a "can't reach the server" state when the API is down.
+  - A profile menu with **Log out**.
+- **Live panels** (with a mint **Live** chip; page headers say which panels are still sample data):
+  - **Productivity → Plan** (`/tasks`):
+    - add (with priority), tick or untick, delete;
+    - a 7-day window grouped into Today, Tomorrow and Later;
+    - version conflicts and remote deletes show a notice and reload, so nothing is silently overwritten.
+  - **Health → Readiness** (`/daily-logs/{today}`):
+    - an empty state, then readiness with points per input;
+    - a check-in dialog (sleep stepper and 1–5 scales);
+    - on a conflict, "Keep server's / Keep mine".
+- **UI tests:** Playwright (`apps/web/e2e/live.spec.ts`, `npm run test:e2e`):
+  - login redirect and wrong password;
+  - task add, complete (persists across reload), conflict from another device, delete;
+  - check-in readiness;
+  - logout ends the session.
+- **Dev tooling:**
+  - `backend/scripts/dev_owner.py` creates a **local-only** test owner from `LIFEOS_DEV_OWNER_*` in the git-ignored `backend/.env`. It refuses outside `LIFEOS_ENV=local`.
+  - The API reads `backend/.env` from any working directory.
+  - `.claude/launch.json` gains an API entry.
+
+### Bugs found and fixed by the end-to-end run
+1. **Logout didn't end the session.** The client skipped CSRF on `/auth/*`, so the server answered 403 while the UI showed the login page. Now CSRF is sent on every mutation.
+2. **Wrong error message when the API was down.** It said "password doesn't match". Server and network failures now say the server can't be reached, and the shell shows an offline state.
+3. **Health showed two answers for readiness.** The sample "Readiness today" stat contradicted the live panel, so it was replaced with a sample-only stat.
+
+### Verification
+- **Backend:** pytest **34 passed**; ruff check and format clean.
+- **Web:** `tsc` clean, eslint clean, `next build` passes.
+- **Playwright:** **3 passed** against the real API and Postgres. The same flow also ran as a scripted check: no page errors, screenshots reviewed.
+- **Not covered yet:**
+  - CI runs the backend and web build but not the Playwright suite, which needs the API, database and web together; that comes next.
+  - The new CI workflow hasn't run on GitHub yet. It runs on the next push.
+
+### Next (only after approval)
+- Phase 3b: Academics endpoints and screen (subjects, study/coding sessions, DSA problems, assignments, milestones, semesters), in the same pattern, with tests.
+- Run Playwright in CI (API + Postgres + web).
+
+---
+
+## Phase 2 · Backend foundation (approved, merged)
 
 **Branch:** `phase-2-backend`. Phases 0–1 are on `main` in `github.com/Simhhaaa/lifeOS`.
 

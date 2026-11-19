@@ -21,12 +21,7 @@ def contract() -> dict:
 
 
 def _ops(paths: dict, strip: str = "") -> dict[tuple[str, str], dict]:
-    return {
-        (m, p.removeprefix(strip)): op
-        for p, item in paths.items()
-        for m, op in item.items()
-        if m in METHODS
-    }
+    return {(m, p.removeprefix(strip)): op for p, item in paths.items() for m, op in item.items() if m in METHODS}
 
 
 def _header_params(op: dict, spec: dict) -> set[str]:

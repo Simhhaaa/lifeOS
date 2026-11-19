@@ -31,7 +31,9 @@ async def test_offline_merge_fills_empty_fields(client: httpx.AsyncClient, auth)
     await client.put(f"/daily-logs/{DAY}", json={"sleep_hours": 7}, headers={**auth, "Idempotency-Key": key()})
     # Second device didn't know a log existed (no If-Match); it adds different fields → merged.
     merged = await client.put(
-        f"/daily-logs/{DAY}", json={"sleep_hours": 7, "energy": 3, "recovery": 3}, headers={**auth, "Idempotency-Key": key()}
+        f"/daily-logs/{DAY}",
+        json={"sleep_hours": 7, "energy": 3, "recovery": 3},
+        headers={**auth, "Idempotency-Key": key()},
     )
     assert merged.status_code == 200
     body = merged.json()
@@ -46,18 +48,28 @@ async def test_offline_disagreement_is_a_conflict(client: httpx.AsyncClient, aut
 
 
 async def test_versioned_update(client: httpx.AsyncClient, auth) -> None:
-    first = (await client.put(f"/daily-logs/{DAY}", json={"energy": 4}, headers={**auth, "Idempotency-Key": key()})).json()
+    first = (
+        await client.put(f"/daily-logs/{DAY}", json={"energy": 4}, headers={**auth, "Idempotency-Key": key()})
+    ).json()
     ok = await client.put(
-        f"/daily-logs/{DAY}", json={"energy": 2}, headers={**auth, "Idempotency-Key": key(), "If-Match": str(first["version"])}
+        f"/daily-logs/{DAY}",
+        json={"energy": 2},
+        headers={**auth, "Idempotency-Key": key(), "If-Match": str(first["version"])},
     )
     assert ok.status_code == 200 and ok.json()["energy"] == 2
-    stale = await client.put(f"/daily-logs/{DAY}", json={"energy": 5}, headers={**auth, "Idempotency-Key": key(), "If-Match": "1"})
+    stale = await client.put(
+        f"/daily-logs/{DAY}", json={"energy": 5}, headers={**auth, "Idempotency-Key": key(), "If-Match": "1"}
+    )
     assert stale.status_code == 409
 
 
 async def test_bounds_and_future_dates(client: httpx.AsyncClient, auth) -> None:
-    assert (await client.put(f"/daily-logs/{DAY}", json={"energy": 6}, headers={**auth, "Idempotency-Key": key()})).status_code == 422
-    assert (await client.put(f"/daily-logs/{DAY}", json={"sleep_hours": 7.3}, headers={**auth, "Idempotency-Key": key()})).status_code == 422
+    assert (
+        await client.put(f"/daily-logs/{DAY}", json={"energy": 6}, headers={**auth, "Idempotency-Key": key()})
+    ).status_code == 422
+    assert (
+        await client.put(f"/daily-logs/{DAY}", json={"sleep_hours": 7.3}, headers={**auth, "Idempotency-Key": key()})
+    ).status_code == 422
     future = (date.today() + timedelta(days=5)).isoformat()
     r = await client.put(f"/daily-logs/{future}", json={"energy": 3}, headers={**auth, "Idempotency-Key": key()})
     assert r.status_code == 422

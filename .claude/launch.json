@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "apps/web", "run", "dev", "--", "--port", "3100"],
       "port": 3100
+    },
+    {
+      "name": "lifeos-api",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd backend && exec .venv/bin/uvicorn app.main:app --port 8000 --reload"],
+      "port": 8000
     }
   ]
 }
