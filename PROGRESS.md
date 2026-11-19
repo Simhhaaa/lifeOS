@@ -1,5 +1,85 @@
 # LIFEOS: progress log
 
+## Phase 3c · Fitness on the real API (awaiting review)
+
+**Scope:** the third Phase 3 slice. The whole Fitness screen now runs on real data, with working logging. Cardio stays with the Health slice (the contract tags it `health`).
+
+### Done
+- **Backend** (`app/api/v1/fitness.py`, `app/services/fitness.py`, `app/schemas/fitness.py`):
+  - **Exercise library:** list (with 8-week sessions, best est. 1RM, last done), create, patch. Names are unique per owner, ignoring case.
+  - **Splits** (`workout_templates`): list, create, replace. The exercises are kept in order with optional target sets and reps.
+  - **Training plan:** get, plus PUT to create or replace it. Replacing needs If-Match; a blind write over an existing plan gives 409 with the server copy.
+  - **Workouts:**
+    - Start or log a workout, with its sets in one transaction; a bad set rolls back the whole workout.
+    - Add a set later. A duplicate position gives 409.
+    - Finish with If-Match. The end can't be in the future or before the start.
+    - Every referenced exercise and template must be the owner's (422 otherwise).
+  - **Read model** (`/fitness/progression`, computed on read; nothing derived is stored or accepted from clients):
+    - est. 1RM, using Epley on 1–10 rep sets (warm-ups excluded);
+    - best set per session for each tracked lift;
+    - PR flags: a session beats every earlier session of that lift by ≥ 0.5 kg; a lift's first session is a baseline, not a PR;
+    - records;
+    - weekly volume and sessions;
+    - working sets per muscle group;
+    - this week against the plan;
+    - the next split in the rotation.
+  - **Body measurements:** log, plus a list over the last N weeks. At least one value is required, and the date can't be in the future.
+  - Progress photos are not built: they need private object storage, which waits on the hosting decision.
+- **Web** (`components/live/fitness/`): every Fitness panel is live.
+  - **Panels:**
+    - stat strip;
+    - this week, with a plan summary and the next split;
+    - recent sessions, as expandable set tables;
+    - progressive overload chart, per tracked lift;
+    - personal records;
+    - volume by muscle group;
+    - body;
+    - exercise library, with edit.
+  - **Dialogs:**
+    - log workout: picking a split pre-fills its sets; kg, reps, optional RPE and a warm-up flag per set;
+    - exercise, add or edit;
+    - split;
+    - training plan: days, plus a rotation you can reorder;
+    - body measurement.
+  - `errorText`, `useSubmit` and the time helpers moved to `components/live/submit.ts`, shared by Academics and Fitness.
+- **UI test:** `e2e/fitness.spec.ts` covers:
+  - exercise, then split, then plan;
+  - a workout from the suggested split, with a warm-up: volume and est. 1RM are checked;
+  - a body measurement;
+  - a reload, to show it all persists.
+
+### Contract additions — need your sign-off (additive; nothing existing removed)
+The spec requires an exercise library and workout splits, and the Phase 1 tables exist, but the contract only had `listExercises`. Added to `docs/api/openapi.yaml` (now 71 operations):
+1. **Exercises:** `POST /exercises` (createExercise) and `PATCH /exercises/{id}` (updateExercise).
+2. **Splits:**
+   - `GET /workout-templates` (listWorkoutTemplates);
+   - `POST /workout-templates` (createWorkoutTemplate);
+   - `PATCH /workout-templates/{id}` (updateWorkoutTemplate, which replaces the name and exercise list).
+3. **Training plan:** `GET /training-plan` and `PUT /training-plan` (getTrainingPlan, setTrainingPlan).
+4. **Body history:** `GET /body-measurements` (listBodyMeasurements). The Body panel shows history, but the contract only allowed logging.
+
+Schema changes:
+- `Exercise` now includes the Meta fields (id, version, timestamps), which editing needs.
+- `Workout` gains `note`, since `WorkoutInput` already accepted it.
+
+### Questions for you
+1. **Starter exercise library?** New accounts start with an empty library, and nothing is invented. Do you want a default set seeded, such as the big compound lifts?
+2. **Editing or deleting logged workouts and sets.** The contract has no endpoints for this yet, so a mistyped set can't be fixed from the UI. Should that come in this phase or later?
+3. **Several exercises tracked as the same lift**, e.g. two bench variations. They share one est. 1RM line and PR history. Is that what you want?
+
+### Verification
+- **Backend:** pytest **52 passed** (8 new fitness tests); ruff clean.
+  - Mutation check: with the 0.5 kg PR threshold removed, the PR test fails as it should.
+- **Web:** `tsc` and eslint clean.
+- **Playwright:** **5 passed** (fitness, academics and 3 earlier) against the real API and Postgres.
+- Screenshots of the empty and populated page, and the log-workout dialog, checked at 1440 px.
+- As with Academics, a local e2e run leaves "E2E …" records on the dev account; CI uses a fresh database.
+
+### Next (only after approval)
+- Phase 3d: Health on the real API (health records, cardio, the health summary), then Productivity (habits, screen time) and the Overview.
+
+---
+
 ## Phase 3b · Academics on the real API (merged; CI green, incl. e2e)
 
 **Scope:** the second Phase 3 slice. The whole Academics screen now runs on real data, with working logging. Fitness, Overview and the read views come next.

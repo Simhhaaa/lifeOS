@@ -1,5 +1,5 @@
-import { FitnessPage } from "@/components/modules/fitness-page";
+import { FitnessLive } from "@/components/live/fitness/fitness-live";
 
 export default function Page() {
-  return <FitnessPage />;
+  return <FitnessLive />;
 }

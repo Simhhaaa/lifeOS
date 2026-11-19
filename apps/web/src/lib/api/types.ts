@@ -138,3 +138,66 @@ export interface AcademicsSummary {
   };
   next_deadline: Assignment | null;
 }
+
+/* ───────── fitness ───────── */
+
+export type MuscleGroup = "chest" | "back" | "legs" | "shoulders" | "arms" | "core" | "full_body";
+export type TrackedLift = "bench" | "squat" | "deadlift" | "ohp";
+
+export interface Exercise extends Meta {
+  name: string;
+  muscle_group: MuscleGroup;
+  equipment: string | null;
+  tracked_lift: TrackedLift | null;
+  sessions_8w: number;
+  best_e1rm_kg: number | null;
+  last_done: string | null;
+}
+
+export interface ExerciseSet extends Meta {
+  exercise_id: string;
+  position: number;
+  load_kg: number;
+  reps: number;
+  rpe: number | null;
+  is_warmup: boolean;
+  is_top_set: boolean;
+  e1rm_kg: number | null;
+}
+
+export interface Workout extends Meta {
+  template_id: string | null;
+  split: string | null;
+  started_at: string;
+  ended_at: string | null;
+  local_date: string;
+  note: string | null;
+  sets: ExerciseSet[];
+  volume_kg: number;
+  pr: boolean;
+}
+
+export interface WorkoutTemplate extends Meta {
+  name: string;
+  exercises: { exercise_id: string; position: number; target_sets: number | null; target_reps: number | null }[];
+}
+
+export interface TrainingPlan extends Meta {
+  weekdays: number[];
+  rotation: string[];
+  active: boolean;
+}
+
+export interface BodyMeasurement extends Meta {
+  measured_on: string;
+  weight_kg: number | null;
+  waist_cm: number | null;
+}
+
+export interface FitnessProgression {
+  this_week: { date: string; planned: boolean; workout_id: string | null }[];
+  next_in_rotation: string | null;
+  lifts: Partial<Record<TrackedLift, { date: string; e1rm_kg: number; load_kg: number; reps: number; pr: boolean }[]>>;
+  records: { exercise: string; e1rm_kg: number; load_kg: number; reps: number; date: string }[];
+  weekly: { week_start: string; sessions: number; volume_kg: number; sets_by_muscle: Partial<Record<MuscleGroup, number>> }[];
+}

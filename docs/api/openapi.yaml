@@ -389,6 +389,120 @@ paths:
           content:
             application/json:
               schema: { type: array, items: { $ref: "#/components/schemas/Exercise" } }
+    post:
+      tags: [fitness]
+      operationId: createExercise
+      summary: Add an exercise to the library. Names are unique per owner (409 duplicate). (Added in Phase 3c.)
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExerciseInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Exercise" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /exercises/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    patch:
+      tags: [fitness]
+      operationId: updateExercise
+      summary: Edit an exercise (e.g. mark it as a tracked lift). (Added in Phase 3c.)
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }, { $ref: "#/components/parameters/IfMatch" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExercisePatch" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Exercise" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /workout-templates:
+    get:
+      tags: [fitness]
+      operationId: listWorkoutTemplates
+      summary: Splits (e.g. Push / Pull / Legs) with their exercises in order. (Added in Phase 3c.)
+      responses:
+        "200":
+          description: Templates
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/WorkoutTemplate" } }
+    post:
+      tags: [fitness]
+      operationId: createWorkoutTemplate
+      summary: Create a split. (Added in Phase 3c.)
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WorkoutTemplateInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkoutTemplate" }
+  /workout-templates/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    patch:
+      tags: [fitness]
+      operationId: updateWorkoutTemplate
+      summary: Replace a split's name and exercise list. (Added in Phase 3c.)
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }, { $ref: "#/components/parameters/IfMatch" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WorkoutTemplateInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkoutTemplate" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /training-plan:
+    get:
+      tags: [fitness]
+      operationId: getTrainingPlan
+      summary: The active plan (training weekdays and split rotation), or null. (Added in Phase 3c.)
+      responses:
+        "200":
+          description: Active plan or null
+          content:
+            application/json:
+              schema: { oneOf: [{ $ref: "#/components/schemas/TrainingPlan" }, { type: "null" }] }
+    put:
+      tags: [fitness]
+      operationId: setTrainingPlan
+      summary: >-
+        Create the active plan, or replace it. Replacing needs If-Match with the current version;
+        without it an existing plan is a 409 with the server copy. (Added in Phase 3c.)
+      parameters:
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { name: If-Match, in: header, required: false, schema: { type: string, pattern: "^[0-9]+$" } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TrainingPlanInput" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TrainingPlan" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /workouts:
     get:
       tags: [fitness]
@@ -473,6 +587,18 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/FitnessProgression" }
   /body-measurements:
+    get:
+      tags: [fitness]
+      operationId: listBodyMeasurements
+      summary: Measurements from the last `weeks` weeks, oldest first. (Added in Phase 3c.)
+      parameters:
+        - { name: weeks, in: query, schema: { type: integer, minimum: 1, maximum: 104, default: 8 } }
+      responses:
+        "200":
+          description: Measurements
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/BodyMeasurement" } }
     post:
       tags: [fitness]
       operationId: logBodyMeasurement
@@ -1388,18 +1514,76 @@ components:
         label: { type: string }
 
     # ── fitness ──
-    Exercise:
+    ExerciseInput:
       type: object
-      required: [id, name, muscle_group]
+      required: [name, muscle_group]
       properties:
-        id: { type: string, format: uuid }
-        name: { type: string }
+        name: { type: string, minLength: 1, maxLength: 80 }
         muscle_group: { type: string, enum: [chest, back, legs, shoulders, arms, core, full_body] }
-        equipment: { type: [string, "null"] }
+        equipment: { type: [string, "null"], maxLength: 40 }
         tracked_lift: { type: [string, "null"], enum: [bench, squat, deadlift, ohp, null] }
-        sessions_8w: { type: integer, readOnly: true }
-        best_e1rm_kg: { type: [number, "null"], readOnly: true, description: "Epley on 1–10 rep sets; null otherwise" }
-        last_done: { type: [string, "null"], format: date, readOnly: true }
+    ExercisePatch:
+      type: object
+      description: Every field optional; only the fields sent change. (Added in Phase 3c.)
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        muscle_group: { type: string, enum: [chest, back, legs, shoulders, arms, core, full_body] }
+        equipment: { type: [string, "null"], maxLength: 40 }
+        tracked_lift: { type: [string, "null"], enum: [bench, squat, deadlift, ohp, null] }
+    Exercise:
+      description: Phase 3c adds the Meta fields (version is needed for updateExercise).
+      allOf:
+        - { $ref: "#/components/schemas/Meta" }
+        - type: object
+          required: [name, muscle_group]
+          properties:
+            name: { type: string }
+            muscle_group: { type: string, enum: [chest, back, legs, shoulders, arms, core, full_body] }
+            equipment: { type: [string, "null"] }
+            tracked_lift: { type: [string, "null"], enum: [bench, squat, deadlift, ohp, null] }
+            sessions_8w: { type: integer, readOnly: true }
+            best_e1rm_kg: { type: [number, "null"], readOnly: true, description: "Epley on 1–10 rep sets; null otherwise" }
+            last_done: { type: [string, "null"], format: date, readOnly: true }
+    TemplateExerciseInput:
+      type: object
+      required: [exercise_id]
+      properties:
+        exercise_id: { type: string, format: uuid }
+        target_sets: { type: [integer, "null"], minimum: 1, maximum: 20 }
+        target_reps: { type: [integer, "null"], minimum: 1, maximum: 100 }
+    WorkoutTemplateInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 40 }
+        exercises: { type: array, maxItems: 30, items: { $ref: "#/components/schemas/TemplateExerciseInput" } }
+    WorkoutTemplate:
+      allOf:
+        - { $ref: "#/components/schemas/Meta" }
+        - type: object
+          properties:
+            name: { type: string }
+            exercises:
+              type: array
+              items:
+                allOf:
+                  - { $ref: "#/components/schemas/TemplateExerciseInput" }
+                  - type: object
+                    properties:
+                      position: { type: integer, minimum: 1 }
+    TrainingPlanInput:
+      type: object
+      required: [weekdays, rotation]
+      properties:
+        weekdays: { type: array, maxItems: 7, uniqueItems: true, items: { type: integer, minimum: 1, maximum: 7 }, description: "1 = Monday … 7 = Sunday" }
+        rotation: { type: array, minItems: 1, maxItems: 7, items: { type: string, format: uuid }, description: Template ids in order }
+    TrainingPlan:
+      allOf:
+        - { $ref: "#/components/schemas/Meta" }
+        - { $ref: "#/components/schemas/TrainingPlanInput" }
+        - type: object
+          properties:
+            active: { type: boolean }
     ExerciseSetInput:
       type: object
       required: [exercise_id, position, load_kg, reps]
@@ -1439,6 +1623,7 @@ components:
             started_at: { type: string, format: date-time }
             ended_at: { type: [string, "null"], format: date-time }
             local_date: { type: string, format: date }
+            note: { type: [string, "null"] }
             sets: { type: array, items: { $ref: "#/components/schemas/ExerciseSet" } }
             volume_kg: { type: number, readOnly: true }
             pr: { type: boolean, readOnly: true }
