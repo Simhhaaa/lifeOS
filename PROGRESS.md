@@ -1,6 +1,6 @@
 # LIFEOS: progress log
 
-## Phase 3c · Fitness on the real API (awaiting review)
+## Phase 3c · Fitness on the real API (merged; CI green, incl. e2e — contract additions and 3 questions still need your answer)
 
 **Scope:** the third Phase 3 slice. The whole Fitness screen now runs on real data, with working logging. Cardio stays with the Health slice (the contract tags it `health`).
 
