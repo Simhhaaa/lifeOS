@@ -1,6 +1,6 @@
 # LIFEOS: progress log
 
-## Phase 3b · Academics on the real API (awaiting review)
+## Phase 3b · Academics on the real API (merged; CI green, incl. e2e)
 
 **Scope:** the second Phase 3 slice. The whole Academics screen now runs on real data, with working logging. Fitness, Overview and the read views come next.
 
@@ -64,6 +64,9 @@ Also, `PATCH /subjects/{id}` now takes a `SubjectPatch` (every field optional) r
 - **Web:** `tsc` and eslint clean.
 - **Playwright:** **4 passed** (3 existing + academics) against the real API and Postgres.
 - Screenshots of the populated page checked at 1440 px and at narrow width.
+- **GitHub CI:** all three jobs green (run #5).
+  - The e2e job is pinned to `ubuntu-24.04`: Playwright 1.56's `install --with-deps` doesn't support newer Ubuntu releases, and the first run failed installing browser dependencies.
+  - Unpin when Playwright is upgraded.
 - **Note on local runs:** the e2e tests sign in as the local dev owner. Only subjects can be deleted through the API, so a local run leaves records named "E2E …" on that account. CI uses a fresh database.
 
 ### Next (only after approval)
